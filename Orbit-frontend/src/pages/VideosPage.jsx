@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { getAllVideos } from "../api/video.api";
 import VideoCard from "../components/video/VideoCard";
+import CoWatchVideosBanner from "../components/cowatch/CoWatchVideosBanner";
 import { useAuth } from "../context/AuthContext";
 import { Lock } from "lucide-react";
 
@@ -72,6 +73,9 @@ const VideosPage = () => {
           Search results for "{query}"
         </h2>
       )}
+
+      {/* Co-Watch Room Option on /videos page */}
+      {isAuthenticated && <CoWatchVideosBanner />}
 
       {/* ✅ SHOW LOGIN BANNER IF NOT AUTHENTICATED */}
       {!isAuthenticated && (

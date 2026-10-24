@@ -51,13 +51,27 @@ const WatchPage = () => {
   const [playlists, setPlaylists] = useState([]);
   const [playlistVideoMap, setPlaylistVideoMap] = useState({});
 
-  // Co-Watch hook (socket.io)
-  const coWatch = useCoWatch({
-    user,
-    videoId,
-    videoTitle: video?.title || '',
-    playerRef,
-  });
+  // Global Co-Watch context
+  const coWatch = useCoWatch();
+
+  // Register the player element with CoWatch context
+  useEffect(() => {
+    if (playerRef.current) {
+      coWatch.registerPlayer(playerRef.current);
+    }
+    return () => {
+      coWatch.unregisterPlayer();
+    };
+  }, [coWatch]);
+
+  // When host switches/loads video, broadcast to all room members
+  useEffect(() => {
+    if (video?._id && coWatch.isHost && coWatch.roomCode) {
+      if (coWatch.currentVideoId !== video._id) {
+        coWatch.changeVideo(video._id, video.title);
+      }
+    }
+  }, [video?._id, video?.title, coWatch.isHost, coWatch.roomCode, coWatch.currentVideoId, coWatch.changeVideo]);
 
   /* ================= LOAD VIDEO ================= */
   useEffect(() => {
@@ -389,8 +403,8 @@ const handleSubscribe = async () => {
 
         <div className="lg:w-96 space-y-4">
 
-          {/* ── Co-Watch Panel (always visible in right sidebar) ── */}
-          {isAuthenticated && (
+          {/* ── Co-Watch Panel (visible in right sidebar ONLY when active in a room) ── */}
+          {isAuthenticated && coWatch.status === "in-room" && (
             <CoWatchPanel coWatch={coWatch} videoTitle={video?.title} />
           )}
 

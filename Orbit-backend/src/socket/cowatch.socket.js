@@ -50,8 +50,8 @@ export function initCoWatchSocket(io) {
             const member = { socketId: socket.id, username, avatar };
             rooms.set(roomCode, {
                 hostId: socket.id,
-                videoId,
-                videoTitle,
+                videoId: videoId || null,
+                videoTitle: videoTitle || null,
                 members: [member],
             });
 
@@ -61,8 +61,8 @@ export function initCoWatchSocket(io) {
                 roomCode,
                 members: [member],
                 hostId: socket.id,
-                videoId,
-                videoTitle,
+                videoId: videoId || null,
+                videoTitle: videoTitle || null,
             });
         });
 
@@ -70,19 +70,27 @@ export function initCoWatchSocket(io) {
          * JOIN room
          * ────────────────────────────────────────── */
         socket.on('join_room', ({ roomCode, username, avatar }) => {
-            const room = rooms.get(roomCode?.toUpperCase());
+            const code = roomCode?.toUpperCase();
+            const room = rooms.get(code);
             if (!room) {
                 socket.emit('error', { message: 'Room not found. Check the code and try again.' });
                 return;
             }
 
+            // Avoid duplicate member entry for same socket
+            const existingIdx = room.members.findIndex(m => m.socketId === socket.id);
             const member = { socketId: socket.id, username, avatar };
-            room.members.push(member);
-            socket.join(roomCode.toUpperCase());
+            if (existingIdx >= 0) {
+                room.members[existingIdx] = member;
+            } else {
+                room.members.push(member);
+            }
+
+            socket.join(code);
 
             // Tell the joiner the full room state
             socket.emit('room_state', {
-                roomCode: roomCode.toUpperCase(),
+                roomCode: code,
                 members: room.members,
                 hostId: room.hostId,
                 videoId: room.videoId,
@@ -90,25 +98,59 @@ export function initCoWatchSocket(io) {
             });
 
             // Announce to everyone else
-            socket.to(roomCode.toUpperCase()).emit('member_joined', { member });
+            socket.to(code).emit('member_joined', { member });
+        });
+
+        /* ──────────────────────────────────────────
+         * CHANGE VIDEO — host changes current video
+         * ────────────────────────────────────────── */
+        socket.on('change_video', ({ roomCode, videoId, videoTitle }) => {
+            const code = roomCode?.toUpperCase();
+            const room = rooms.get(code);
+            if (!room) return;
+            if (room.hostId !== socket.id) return; // only host can switch video
+
+            room.videoId = videoId || null;
+            room.videoTitle = videoTitle || null;
+
+            // Broadcast new video to all room participants
+            io.to(code).emit('video_changed', {
+                videoId: room.videoId,
+                videoTitle: room.videoTitle,
+                hostId: socket.id,
+            });
+
+            if (videoTitle) {
+                const sysMsg = {
+                    id: `sys-${Date.now()}`,
+                    username: 'Orbit Room',
+                    avatar: null,
+                    text: `Host switched video to "${videoTitle}"`,
+                    at: new Date().toISOString(),
+                    isSystem: true,
+                };
+                io.to(code).emit('chat_message', sysMsg);
+            }
         });
 
         /* ──────────────────────────────────────────
          * SYNC (play / pause / seek) — host only
          * ────────────────────────────────────────── */
         socket.on('sync', ({ roomCode, type, time }) => {
-            const room = rooms.get(roomCode);
+            const code = roomCode?.toUpperCase();
+            const room = rooms.get(code);
             if (!room) return;
             if (room.hostId !== socket.id) return; // only host can sync
 
-            socket.to(roomCode).emit('sync', { type, time, fromSocketId: socket.id });
+            socket.to(code).emit('sync', { type, time, fromSocketId: socket.id });
         });
 
         /* ──────────────────────────────────────────
          * CHAT MESSAGE
          * ────────────────────────────────────────── */
         socket.on('chat_message', ({ roomCode, text }) => {
-            const room = rooms.get(roomCode);
+            const code = roomCode?.toUpperCase();
+            const room = rooms.get(code);
             if (!room) return;
 
             const member = room.members.find(m => m.socketId === socket.id);
@@ -122,7 +164,7 @@ export function initCoWatchSocket(io) {
                 at: new Date().toISOString(),
             };
 
-            io.to(roomCode).emit('chat_message', msg);
+            io.to(code).emit('chat_message', msg);
         });
 
         /* ──────────────────────────────────────────
