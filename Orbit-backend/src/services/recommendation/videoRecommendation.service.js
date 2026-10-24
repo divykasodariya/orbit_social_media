@@ -72,24 +72,27 @@ export const clearCorpusCache = () => {
  * Looks for videos watched/liked by friends
  */
 const getGraphScores = async (userId, targetVideoIds) => {
-    // Example cypher: Find friends who interacted with these videos
-    // (Assuming :WATCHED or :LIKED edges exist. If not, we fall back to general popularity)
-    const cypher = `
-        MATCH (u:User {mongoId: $userId})-[:FRIEND]-(friend:User)
-        // If we had video nodes: MATCH (friend)-[:WATCHED]->(v:Video)
-        RETURN count(friend) AS networkActivity
-    `;
-    
-    const result = await readQuery(cypher, { userId: userId.toString() });
-    const activity = result && result.length > 0 ? result[0].get('networkActivity').low || 0 : 0;
-    
     const scores = {};
     targetVideoIds.forEach(id => {
-        // Mocking graph propagation: videos popular in user's network get a boost.
-        // In a fully integrated graph, we would query exact video overlaps.
-        // We will assign a generic graph score based on network activity for now.
-        scores[id] = activity + Math.random() * 5; // Simulating exact video overlaps
+        scores[id] = 0;
     });
+
+    try {
+        const cypher = `
+            MATCH (u:User {mongoId: $userId})-[:FRIEND]-(friend:User)
+            RETURN count(friend) AS networkActivity
+        `;
+        
+        const result = await readQuery(cypher, { userId: userId.toString() });
+        const activity = result && result.length > 0 ? (result[0].get('networkActivity')?.low ?? result[0].get('networkActivity') ?? 0) : 0;
+        
+        targetVideoIds.forEach(id => {
+            scores[id] = activity + Math.random() * 5;
+        });
+    } catch (e) {
+        // When Neo4j is offline, graph scores remain 0.
+        // Content-based NLP similarity continues uninterrupted!
+    }
     
     return scores;
 };
@@ -155,7 +158,7 @@ export const getRecommendedVideos = async (userId, sourceVideoId, config = { wei
         let reason = "Recommended for you";
         if (normSg > normSc && normSg > 0.7) {
             reason = "Recommended through social graph";
-        } else if (normSc > 0.8) {
+        } else if (normSc > 0.2 || c.Sc > 0) {
             reason = "Similar topic to what you watched";
         }
 

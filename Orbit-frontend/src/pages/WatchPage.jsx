@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
-import { getVideoById, getAllVideos } from "../api/video.api";
+import { getVideoById, getAllVideos, getVideoRecommendations } from "../api/video.api";
 import {
   getVideoComments,
   addComment,
@@ -62,11 +62,22 @@ const WatchPage = () => {
         const commentsRes = await getVideoComments(videoId);
         setComments(commentsRes?.data?.data?.docs || []);
 
-        const allVideosRes = await getAllVideos();
-        const docs = allVideosRes?.data?.data?.docs || [];
-        setRelatedVideos(
-          docs.filter((x) => x._id !== videoId).slice(0, 10)
-        );
+        // --- Recommendation Sidebar ---
+        // Try the NLP + Graph hybrid engine first; fall back to popularity sort
+        try {
+          const recRes = await getVideoRecommendations(videoId, 10);
+          const recs = recRes?.data?.data;
+          if (Array.isArray(recs) && recs.length > 0) {
+            setRelatedVideos(recs);
+          } else {
+            throw new Error("Empty recommendations");
+          }
+        } catch {
+          // Fallback: pull all videos and exclude current
+          const allVideosRes = await getAllVideos();
+          const docs = allVideosRes?.data?.data?.docs || [];
+          setRelatedVideos(docs.filter((x) => x._id !== videoId).slice(0, 10));
+        }
       } catch (err) {
         console.error("WatchPage load failed", err);
       }
@@ -360,15 +371,34 @@ const handleSubscribe = async () => {
         <div className="block lg:hidden border-t my-6" />
 
         <div className="lg:w-96 space-y-4">
-          {relatedVideos.map((v, i) => (
-            <div
-              key={v._id}
-              style={{ animationDelay: `${i * 0.04}s` }}
-              className="animate-[cardIn_0.35s_ease-out]"
-            >
-              <VideoCard video={v} layout="list" />
-            </div>
-          ))}
+          {relatedVideos.length === 0 ? (
+            // Skeleton placeholders while loading
+            [...Array(5)].map((_, i) => (
+              <div key={i} className="flex gap-3 animate-pulse">
+                <div className="w-40 h-24 bg-gray-200 rounded-lg flex-shrink-0" />
+                <div className="flex-1 space-y-2 pt-1">
+                  <div className="h-3 bg-gray-200 rounded w-full" />
+                  <div className="h-3 bg-gray-200 rounded w-3/4" />
+                  <div className="h-3 bg-gray-200 rounded w-1/2" />
+                </div>
+              </div>
+            ))
+          ) : (
+            relatedVideos.map((v, i) => (
+              <div
+                key={v._id}
+                style={{ animationDelay: `${i * 0.04}s` }}
+                className="animate-[cardIn_0.35s_ease-out]"
+              >
+                {v._recommendationReason && (
+                  <p className="text-xs text-blue-500 font-medium mb-1 pl-1">
+                    ✦ {v._recommendationReason}
+                  </p>
+                )}
+                <VideoCard video={v} layout="list" />
+              </div>
+            ))
+          )}
         </div>
       </div>
 

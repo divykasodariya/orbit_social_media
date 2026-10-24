@@ -29,3 +29,6 @@ export const deleteVideo = (videoId) =>
 
 export const togglePublishStatus = (videoId) =>
   http.patch(`/videos/toggle/publish/${videoId}`);
+
+export const getVideoRecommendations = (videoId, limit = 10) =>
+  http.get(`/videos/recommendations/${videoId}?limit=${limit}`);

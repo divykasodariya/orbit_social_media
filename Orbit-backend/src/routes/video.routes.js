@@ -10,7 +10,8 @@ import {
   getVideoById,
   updateVideo,
   deleteVideo,
-  togglePublishStatus
+  togglePublishStatus,
+  getVideoRecommendations
 } from "../controllers/video.controller.js";
 
 const router = Router();
@@ -22,6 +23,9 @@ router.get("/", getAllVideos);
 
 // 🔥 MUST be above :videoId
 router.get("/user/videos", verifyJWT, getAllUserVideos);
+
+// 🤖 Recommendations - must be ABOVE /:videoId
+router.get("/recommendations/:videoId", verifyJWT, getVideoRecommendations);
 
 // Watch page (PUBLIC)
 router.get("/:videoId", verifyJWT, getVideoById);

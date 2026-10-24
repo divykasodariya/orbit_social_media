@@ -5,7 +5,7 @@ import { asyncHandler } from "../utils/asyncHandler.js";
 import {ApiError} from "../utils/ApiError.js"
 import {ApiResponse} from "../utils/ApiResponse.js"
 import { uploadOnCloudinary, /*deleteOnCloudinary*/ } from "../utils/cloudinary.js"
-// import { use } from "react";
+import { getRecommendedVideos } from "../services/recommendation/videoRecommendation.service.js";
 
 
 // const getAllVideos = asyncHandler(async (req, res) => {
@@ -833,6 +833,65 @@ const togglePublishStatus = asyncHandler(async (req, res) => {
 });
 
 
+/**
+ * GET /api/v1/videos/recommendations/:videoId
+ * Returns NLP + Social Graph hybrid recommendations for a given video.
+ * Falls back to popularity-sorted videos if the engine returns nothing.
+ */
+const getVideoRecommendations = asyncHandler(async (req, res) => {
+    const { videoId } = req.params;
+    const { limit = 10 } = req.query;
+
+    if (!isValidObjectId(videoId)) {
+        throw new ApiError(400, "Invalid video id");
+    }
+
+    const userId = req.user?._id;
+    const numLimit = parseInt(limit) || 10;
+
+    let recommendations = [];
+
+    try {
+        // Run the NLP + Graph hybrid engine
+        recommendations = await getRecommendedVideos(
+            userId,
+            videoId,
+            { weightGraph: 0.60, weightContent: 0.40 },
+            numLimit
+        );
+    } catch (err) {
+        console.warn("[Recommendation] Engine failed, using fallback:", err.message);
+    }
+
+    // If engine returned results, format and return them
+    if (recommendations && recommendations.length > 0) {
+        const formatted = recommendations.map(rec => ({
+            ...rec.video,
+            _recommendationReason: rec.reason,
+            _score: rec.score,
+            _rank: rec.rank
+        }));
+
+        return res.status(200).json(
+            new ApiResponse(200, formatted, "Video recommendations fetched successfully")
+        );
+    }
+
+    // --- Fallback: popularity-sorted videos (excluding current) ---
+    const fallback = await Video.find({
+        isPublished: true,
+        _id: { $ne: new mongoose.Types.ObjectId(videoId) }
+    })
+    .populate("owner", "fullName username avatar")
+    .sort({ views: -1, createdAt: -1 })
+    .limit(numLimit)
+    .lean();
+
+    return res.status(200).json(
+        new ApiResponse(200, fallback, "Video recommendations fetched (popularity fallback)")
+    );
+});
+
 export {
     getAllVideos,
     getAllUserVideos,
@@ -840,5 +899,6 @@ export {
     getVideoById,
     updateVideo,
     deleteVideo,
-    togglePublishStatus
+    togglePublishStatus,
+    getVideoRecommendations
 }
