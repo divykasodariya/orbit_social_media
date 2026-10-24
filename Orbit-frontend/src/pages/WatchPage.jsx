@@ -54,15 +54,16 @@ const WatchPage = () => {
   // Global Co-Watch context
   const coWatch = useCoWatch();
 
-  // Register the player element with CoWatch context
-  useEffect(() => {
-    if (playerRef.current) {
-      coWatch.registerPlayer(playerRef.current);
-    }
-    return () => {
-      coWatch.unregisterPlayer();
-    };
-  }, [coWatch]);
+  // Flag to suppress sendSync when the context itself is driving playback
+  // (prevents an echo loop: context.play → onPlay → sendSync → sync → play → ...)
+  const suppressSyncRef = useRef(false);
+
+  // Callback ref — registers the player the instant the <video> element mounts
+  const setPlayerRef = useCallback((el) => {
+    playerRef.current = el;
+    if (el) coWatch.registerPlayer(el, suppressSyncRef);
+    else coWatch.unregisterPlayer();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // When host switches/loads video, broadcast to all room members
   useEffect(() => {
@@ -250,14 +251,23 @@ const handleSubscribe = async () => {
             overflow-hidden animate-[cardIn_0.4s_ease-out]"
           >
             <video
-              ref={playerRef}
+              ref={setPlayerRef}
               src={video.videoFile}
               controls
               autoPlay
               className="w-full h-full"
-              onPlay={(e) => coWatch.sendSync('play', e.target.currentTime)}
-              onPause={(e) => coWatch.sendSync('pause', e.target.currentTime)}
-              onSeeked={(e) => coWatch.sendSync('seek', e.target.currentTime)}
+              onPlay={(e) => {
+                if (suppressSyncRef.current) return;
+                coWatch.sendSync('play', e.target.currentTime);
+              }}
+              onPause={(e) => {
+                if (suppressSyncRef.current) return;
+                coWatch.sendSync('pause', e.target.currentTime);
+              }}
+              onSeeked={(e) => {
+                if (suppressSyncRef.current) return;
+                coWatch.sendSync('seek', e.target.currentTime);
+              }}
             />
           </div>
 

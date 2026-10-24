@@ -7,6 +7,9 @@ const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || "http://localhost:8000";
 
 const CoWatchContext = createContext(null);
 
+// Keep a ref to the suppress flag so context can set it without prop drilling
+let _suppressSyncRef = null;
+
 export function CoWatchProvider({ children }) {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -76,9 +79,13 @@ export function CoWatchProvider({ children }) {
       setCurrentVideoId(videoId);
       setCurrentVideoTitle(videoTitle);
 
-      // If a new video is chosen, navigate everyone to it!
+      // Navigate non-hosts to the new video. Use replace so back-button works naturally.
+      // We don't scroll — host intentionally changed the video so scroll-to-top is fine,
+      // but for viewers we keep their position by restoring it after the route swap.
       if (videoId && !location.pathname.startsWith(`/watch/${videoId}`)) {
-        navigate(`/watch/${videoId}`);
+        navigate(`/watch/${videoId}`, { replace: false });
+        // Restore scroll position for viewers — the page is the same layout
+        requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "instant" }));
       }
     });
 
@@ -86,21 +93,28 @@ export function CoWatchProvider({ children }) {
       const player = playerRef.current;
       if (!player) return;
 
-      // Only sync if time difference is greater than 0.3s to prevent audio jitter
+      // Set suppress flag BEFORE calling play/pause so the video element's
+      // onPlay/onPause handlers don't echo the event back to the server
+      const setSuppressed = (v) => {
+        if (_suppressSyncRef) _suppressSyncRef.current = v;
+      };
+
       const diff = Math.abs((player.currentTime || 0) - time);
 
-      if (type === "seek") {
-        player.currentTime = time;
-      } else if (type === "play") {
-        if (diff > 0.4) {
+      setSuppressed(true);
+      try {
+        if (type === "seek") {
           player.currentTime = time;
+        } else if (type === "play") {
+          if (diff > 0.4) player.currentTime = time;
+          player.play().catch(() => {});
+        } else if (type === "pause") {
+          if (diff > 0.4) player.currentTime = time;
+          player.pause();
         }
-        player.play().catch(() => {});
-      } else if (type === "pause") {
-        if (diff > 0.4) {
-          player.currentTime = time;
-        }
-        player.pause();
+      } finally {
+        // Release suppress after a short tick (play() is async)
+        setTimeout(() => setSuppressed(false), 50);
       }
     });
 
@@ -194,12 +208,14 @@ export function CoWatchProvider({ children }) {
   }, [roomCode]);
 
   /* ── Register / Unregister video element ref ── */
-  const registerPlayer = useCallback((el) => {
+  const registerPlayer = useCallback((el, suppressRef = null) => {
     playerRef.current = el;
+    _suppressSyncRef = suppressRef; // store module-level so sync handler can reach it
   }, []);
 
   const unregisterPlayer = useCallback(() => {
     playerRef.current = null;
+    _suppressSyncRef = null;
   }, []);
 
   /* ── Clean up on window unload ── */

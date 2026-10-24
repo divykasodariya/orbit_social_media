@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { useEffect, useRef, useState } from "react";
+import CoWatchNavButton from "../cowatch/CoWatchNavButton";
 
 const Navbar = ({ onMenuClick }) => {
   const { user, isAuthenticated, logout } = useAuth();
@@ -111,6 +112,8 @@ const Navbar = ({ onMenuClick }) => {
 
             {isAuthenticated ? (
               <>
+                <CoWatchNavButton />
+
                 <Link
                   to="/upload"
                   className="p-2 rounded hover:bg-gray-100
