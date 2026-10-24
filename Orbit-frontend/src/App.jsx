@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import MainLayout from "./layouts/MainLayout";
 import ProtectedRoute from "./components/layout/ProtectedRoute";
 import { useAuth } from "./context/AuthContext";
+import { CoWatchProvider } from "./context/CoWatchContext";
 
 // Pages
 import HomePage from "./pages/HomePage";
@@ -53,33 +54,35 @@ function AuthRoute({ children }) {
 function App() {
   return (
     <BrowserRouter>
-      <Routes>
-        {/* ================= AUTH ROUTES ================= */}
-        <Route
-          path="/login"
-          element={
-            <AuthRoute>
-              <LoginPage />
-            </AuthRoute>
-          }
-        />
-        <Route
-          path="/register"
-          element={
-            <AuthRoute>
-              <RegisterPage />
-            </AuthRoute>
-          }
-        />
+      <CoWatchProvider>
+        <Routes>
+          {/* ================= AUTH ROUTES ================= */}
+          <Route
+            path="/login"
+            element={
+              <AuthRoute>
+                <LoginPage />
+              </AuthRoute>
+            }
+          />
+          <Route
+            path="/register"
+            element={
+              <AuthRoute>
+                <RegisterPage />
+              </AuthRoute>
+            }
+          />
 
-        <Route element={<MainLayout />}>
-          <Route path="/" element={<HomePage />} />
-          <Route path="/videos" element={<VideosPage />} />
-          <Route path="/communities" element={<CommunitiesPage />} />
-          <Route path="/watch/:videoId" element={<WatchPage />} />
-          <Route path="/channel/:username" element={<ChannelPage />} />
-          <Route path="/tweets" element={<TweetsPage />} />
-        </Route>
+          <Route element={<MainLayout />}>
+            <Route path="/" element={<HomePage />} />
+            <Route path="/videos" element={<VideosPage />} />
+            <Route path="/video" element={<Navigate to="/videos" replace />} />
+            <Route path="/communities" element={<CommunitiesPage />} />
+            <Route path="/watch/:videoId" element={<WatchPage />} />
+            <Route path="/channel/:username" element={<ChannelPage />} />
+            <Route path="/tweets" element={<TweetsPage />} />
+          </Route>
 
         {/* ================= PROTECTED ROUTES ================= */}
         <Route element={<ProtectedRoute />}>
@@ -103,6 +106,7 @@ function App() {
         {/* ================= 404 CATCH-ALL ================= */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      </CoWatchProvider>
     </BrowserRouter>
   );
 }

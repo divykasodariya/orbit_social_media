@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
@@ -22,6 +22,8 @@ import {
 
 import CommentItem from "../components/comment/CommentItem";
 import VideoCard from "../components/video/VideoCard";
+import CoWatchPanel from "../components/cowatch/CoWatchPanel";
+import { useCoWatch } from "../hooks/useCoWatch";
 
 import { ThumbsUp, Bell, Bookmark, X } from "lucide-react";
 import { formatViews, formatDate } from "../utils/helpers";
@@ -30,6 +32,9 @@ const WatchPage = () => {
   const { videoId } = useParams();
   const navigate = useNavigate();
   const { user, isAuthenticated } = useAuth();
+
+  // Ref to the <video> element so useCoWatch can sync play/pause/seek
+  const playerRef = useRef(null);
 
   const [video, setVideo] = useState(null);
   const [comments, setComments] = useState([]);
@@ -45,6 +50,29 @@ const WatchPage = () => {
   const [showPlaylistModal, setShowPlaylistModal] = useState(false);
   const [playlists, setPlaylists] = useState([]);
   const [playlistVideoMap, setPlaylistVideoMap] = useState({});
+
+  // Global Co-Watch context
+  const coWatch = useCoWatch();
+
+  // Flag to suppress sendSync when the context itself is driving playback
+  // (prevents an echo loop: context.play → onPlay → sendSync → sync → play → ...)
+  const suppressSyncRef = useRef(false);
+
+  // Callback ref — registers the player the instant the <video> element mounts
+  const setPlayerRef = useCallback((el) => {
+    playerRef.current = el;
+    if (el) coWatch.registerPlayer(el, suppressSyncRef);
+    else coWatch.unregisterPlayer();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // When host switches/loads video, broadcast to all room members
+  useEffect(() => {
+    if (video?._id && coWatch.isHost && coWatch.roomCode) {
+      if (coWatch.currentVideoId !== video._id) {
+        coWatch.changeVideo(video._id, video.title);
+      }
+    }
+  }, [video?._id, video?.title, coWatch.isHost, coWatch.roomCode, coWatch.currentVideoId, coWatch.changeVideo]);
 
   /* ================= LOAD VIDEO ================= */
   useEffect(() => {
@@ -223,10 +251,23 @@ const handleSubscribe = async () => {
             overflow-hidden animate-[cardIn_0.4s_ease-out]"
           >
             <video
+              ref={setPlayerRef}
               src={video.videoFile}
               controls
               autoPlay
               className="w-full h-full"
+              onPlay={(e) => {
+                if (suppressSyncRef.current) return;
+                coWatch.sendSync('play', e.target.currentTime);
+              }}
+              onPause={(e) => {
+                if (suppressSyncRef.current) return;
+                coWatch.sendSync('pause', e.target.currentTime);
+              }}
+              onSeeked={(e) => {
+                if (suppressSyncRef.current) return;
+                coWatch.sendSync('seek', e.target.currentTime);
+              }}
             />
           </div>
 
@@ -367,10 +408,16 @@ const handleSubscribe = async () => {
           </div>
         </div>
 
-        {/* RIGHT */}
+        {/* RIGHT SIDEBAR */}
         <div className="block lg:hidden border-t my-6" />
 
         <div className="lg:w-96 space-y-4">
+
+          {/* ── Co-Watch Panel (visible in right sidebar ONLY when active in a room) ── */}
+          {isAuthenticated && coWatch.status === "in-room" && (
+            <CoWatchPanel coWatch={coWatch} videoTitle={video?.title} />
+          )}
+
           {relatedVideos.length === 0 ? (
             // Skeleton placeholders while loading
             [...Array(5)].map((_, i) => (
