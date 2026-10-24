@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
@@ -22,6 +22,8 @@ import {
 
 import CommentItem from "../components/comment/CommentItem";
 import VideoCard from "../components/video/VideoCard";
+import CoWatchPanel from "../components/cowatch/CoWatchPanel";
+import { useCoWatch } from "../hooks/useCoWatch";
 
 import { ThumbsUp, Bell, Bookmark, X } from "lucide-react";
 import { formatViews, formatDate } from "../utils/helpers";
@@ -30,6 +32,9 @@ const WatchPage = () => {
   const { videoId } = useParams();
   const navigate = useNavigate();
   const { user, isAuthenticated } = useAuth();
+
+  // Ref to the <video> element so useCoWatch can sync play/pause/seek
+  const playerRef = useRef(null);
 
   const [video, setVideo] = useState(null);
   const [comments, setComments] = useState([]);
@@ -45,6 +50,14 @@ const WatchPage = () => {
   const [showPlaylistModal, setShowPlaylistModal] = useState(false);
   const [playlists, setPlaylists] = useState([]);
   const [playlistVideoMap, setPlaylistVideoMap] = useState({});
+
+  // Co-Watch hook (socket.io)
+  const coWatch = useCoWatch({
+    user,
+    videoId,
+    videoTitle: video?.title || '',
+    playerRef,
+  });
 
   /* ================= LOAD VIDEO ================= */
   useEffect(() => {
@@ -223,10 +236,14 @@ const handleSubscribe = async () => {
             overflow-hidden animate-[cardIn_0.4s_ease-out]"
           >
             <video
+              ref={playerRef}
               src={video.videoFile}
               controls
               autoPlay
               className="w-full h-full"
+              onPlay={(e) => coWatch.sendSync('play', e.target.currentTime)}
+              onPause={(e) => coWatch.sendSync('pause', e.target.currentTime)}
+              onSeeked={(e) => coWatch.sendSync('seek', e.target.currentTime)}
             />
           </div>
 
@@ -367,10 +384,16 @@ const handleSubscribe = async () => {
           </div>
         </div>
 
-        {/* RIGHT */}
+        {/* RIGHT SIDEBAR */}
         <div className="block lg:hidden border-t my-6" />
 
         <div className="lg:w-96 space-y-4">
+
+          {/* ── Co-Watch Panel (always visible in right sidebar) ── */}
+          {isAuthenticated && (
+            <CoWatchPanel coWatch={coWatch} videoTitle={video?.title} />
+          )}
+
           {relatedVideos.length === 0 ? (
             // Skeleton placeholders while loading
             [...Array(5)].map((_, i) => (

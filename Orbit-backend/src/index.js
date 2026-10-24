@@ -3,13 +3,35 @@
 // ============================================
 
 import dotenv from "dotenv";
+import http from "http";
+import { Server as SocketIOServer } from "socket.io";
 import connectDB from "./db/index.js";
 import { app } from "./app.js";
 import { initNeo4j } from "./config/neo4j.config.js";
 import { setupConstraints } from "./services/graph/neo4j.service.js";
+import { initCoWatchSocket } from "./socket/cowatch.socket.js";
 
 // Load environment variables
 dotenv.config({ path: "./.env" });
+
+// Wrap Express with an http.Server so Socket.io can attach
+const server = http.createServer(app);
+
+const io = new SocketIOServer(server, {
+  cors: {
+    origin: (origin, cb) => {
+      if (!origin || origin.startsWith("http://localhost") || origin.endsWith(".vercel.app")) {
+        cb(null, true);
+      } else {
+        cb(new Error("Socket.io CORS blocked"));
+      }
+    },
+    credentials: true,
+  },
+});
+
+// Attach co-watch namespace
+initCoWatchSocket(io);
 
 // Connect to MongoDB
 connectDB()
@@ -17,10 +39,11 @@ connectDB()
     // Start server
     const PORT = process.env.PORT || 8000;
     
-    app.listen(PORT, async () => {
+    server.listen(PORT, async () => {
       console.log(`✅ Server is running at Port: ${PORT}`);
       console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
       console.log(`🔗 Health check: http://localhost:${PORT}/health`);
+      console.log(`🎬 Co-Watch Socket.io ready`);
       
       try {
           const neo4jDriver = initNeo4j();
