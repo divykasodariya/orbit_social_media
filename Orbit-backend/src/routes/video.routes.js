@@ -12,7 +12,8 @@ import {
   updateVideo,
   deleteVideo,
   togglePublishStatus,
-  getVideoRecommendations
+  getVideoRecommendations,
+  triggerVideoModeration
 } from "../controllers/video.controller.js";
 
 const router = Router();
@@ -46,6 +47,9 @@ router.post(
   ]),
   publishVideo
 );
+
+// 🛡️ Content Safety & Shadow Ban Moderation trigger
+router.post("/:videoId/moderate", verifyJWT, triggerVideoModeration);
 
 // Update / delete
 router

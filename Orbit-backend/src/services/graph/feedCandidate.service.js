@@ -52,7 +52,8 @@ export const getSubscriptionVideoCandidates = async (userId, limit = 50) => {
 
     const videos = await Video.find({ 
         owner: { $in: channelIds },
-        isPublished: true 
+        isPublished: true,
+        isShadowBanned: { $ne: true }
     }).populate("owner", "fullName username avatar")
       .sort({ createdAt: -1 }).limit(limit).lean();
 
@@ -92,7 +93,10 @@ export const getFriendPostCandidates = async (userId, limit = 50) => {
  * 4. Trending/Popular fallback candidates
  */
 export const getPopularCandidates = async (limit = 20) => {
-    const popularVideos = await Video.find({ isPublished: true }).populate("owner", "fullName username avatar").sort({ views: -1 }).limit(limit).lean();
+    const popularVideos = await Video.find({ 
+        isPublished: true,
+        isShadowBanned: { $ne: true }
+    }).populate("owner", "fullName username avatar").sort({ views: -1 }).limit(limit).lean();
     const popularThreads = await Thread.find({ isModeratorRemoved: false }).populate("authorId", "fullName username avatar").populate("communityId", "name slug avatar").sort({ score: -1 }).limit(limit).lean();
     // Tweets don't have score by default, just use recent
     const recentPosts = await Tweet.find({}).populate("owner", "fullName username avatar").sort({ createdAt: -1 }).limit(limit).lean();

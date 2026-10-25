@@ -7,6 +7,7 @@ import {ApiResponse} from "../utils/ApiResponse.js"
 import { uploadOnCloudinary, /*deleteOnCloudinary*/ } from "../utils/cloudinary.js"
 import { getRecommendedVideos } from "../services/recommendation/videoRecommendation.service.js";
 import { processVideoTranscription, safeUnlink } from "../services/transcription/index.js";
+import { moderateVideoById } from "../services/moderation/index.js";
 
 
 // const getAllVideos = asyncHandler(async (req, res) => {
@@ -102,6 +103,7 @@ const getAllVideos = asyncHandler(async (req, res) => {
 
     const matchStage = {
         isPublished: true,
+        isShadowBanned: { $ne: true },
         ...(query && {
             title: { $regex: query, $options: "i" }
         })
@@ -602,6 +604,13 @@ const getVideoById = asyncHandler(async (req, res) => {
         transcription_status: video.transcription_status,
         transcription_error: video.transcription_error,
 
+        // AI Moderation & Safety details
+        isShadowBanned: video.isShadowBanned || false,
+        toxicityScore: video.toxicityScore || 0,
+        isVulgar: video.isVulgar || false,
+        flaggedCategories: video.flaggedCategories || [],
+        moderationStatus: video.moderationStatus || "pending",
+
         likesCount,
         isLiked,
 
@@ -719,7 +728,16 @@ if (!updatedVideo) {
         throw new ApiError(404, "Video not found");
     }
 
-    // 6️⃣ Response
+    // 6️⃣ If title or description changed, trigger background re-moderation
+    if (title || description) {
+        setImmediate(() => {
+            moderateVideoById(updatedVideo._id).catch((err) => {
+                console.error("[Background Error] Re-moderation failed after video update:", err.message);
+            });
+        });
+    }
+
+    // 7️⃣ Response
     return res.status(200).json(
         new ApiResponse(200, updatedVideo, "Video updated successfully")
     );
@@ -895,9 +913,10 @@ const getVideoRecommendations = asyncHandler(async (req, res) => {
         );
     }
 
-    // --- Fallback: popularity-sorted videos (excluding current) ---
+    // --- Fallback: popularity-sorted videos (excluding current and shadow banned) ---
     const fallback = await Video.find({
         isPublished: true,
+        isShadowBanned: { $ne: true },
         _id: { $ne: new mongoose.Types.ObjectId(videoId) }
     })
     .populate("owner", "fullName username avatar")
@@ -934,6 +953,32 @@ const getVideoSubtitles = asyncHandler(async (req, res) => {
     return res.status(200).send(video.caption_vtt);
 });
 
+/**
+ * Manually trigger AI moderation analysis on a video (Owner or Admin)
+ */
+const triggerVideoModeration = asyncHandler(async (req, res) => {
+    const { videoId } = req.params;
+
+    if (!isValidObjectId(videoId)) {
+        throw new ApiError(400, "Invalid video id");
+    }
+
+    const video = await Video.findById(videoId);
+    if (!video) {
+        throw new ApiError(404, "Video not found");
+    }
+
+    if (video.owner.toString() !== req.user._id.toString()) {
+        throw new ApiError(403, "You are not authorized to moderate this video");
+    }
+
+    const result = await moderateVideoById(videoId);
+
+    return res.status(200).json(
+        new ApiResponse(200, result, "Video content moderation analysis completed")
+    );
+});
+
 export {
     getAllVideos,
     getAllUserVideos,
@@ -943,5 +988,6 @@ export {
     updateVideo,
     deleteVideo,
     togglePublishStatus,
-    getVideoRecommendations
+    getVideoRecommendations,
+    triggerVideoModeration
 }

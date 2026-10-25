@@ -1,6 +1,7 @@
 import { Video } from "../../models/video.model.js";
 import { extractAudioForWhisper, safeUnlink } from "./audioExtractor.service.js";
 import { transcribeWithGroq } from "./groqTranscription.service.js";
+import { moderateVideoById } from "../moderation/index.js";
 
 /**
  * Orchestrates post-upload audio extraction, Groq transcription,
@@ -48,6 +49,14 @@ export const processVideoTranscription = async (videoId, videoFilePath, options 
 
     console.log(`[TranscriptionWorker] Successfully completed transcription for videoId: ${videoId}`);
 
+    // 5. Trigger AI Content Safety & Shadow Ban Moderation (Llama 3.3)
+    console.log(`[TranscriptionWorker] Triggering Llama 3.3 toxicity & vulgarity moderation for videoId: ${videoId}`);
+    try {
+      await moderateVideoById(videoId);
+    } catch (modErr) {
+      console.error(`[TranscriptionWorker] Moderation analysis failed for videoId ${videoId}:`, modErr.message);
+    }
+
   } catch (error) {
     console.error(`[TranscriptionWorker] Failed processing videoId ${videoId}:`, error.message);
 
@@ -61,6 +70,14 @@ export const processVideoTranscription = async (videoId, videoFilePath, options 
       });
     } catch (dbErr) {
       console.error(`[TranscriptionWorker] Failed updating failure status in DB:`, dbErr.message);
+    }
+
+    // Run fallback moderation on title + description even if transcription failed
+    try {
+      console.log(`[TranscriptionWorker] Running fallback title/description moderation for videoId: ${videoId}`);
+      await moderateVideoById(videoId);
+    } catch (modErr) {
+      console.error(`[TranscriptionWorker] Fallback moderation failed for videoId ${videoId}:`, modErr.message);
     }
 
   } finally {

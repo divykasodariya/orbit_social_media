@@ -72,6 +72,41 @@ const videoSchema = new Schema(
       type: String,
       default: null,
     },
+
+    // 🛡️ Toxicity, Vulgarity & Shadow Banning (Llama 3.3)
+    isShadowBanned: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    toxicityScore: {
+      type: Number,
+      default: 0,
+      min: 0,
+      max: 1,
+    },
+    isVulgar: {
+      type: Boolean,
+      default: false,
+    },
+    flaggedCategories: {
+      type: [String],
+      default: [],
+    },
+    moderationStatus: {
+      type: String,
+      enum: ["pending", "processing", "completed", "failed"],
+      default: "pending",
+      index: true,
+    },
+    moderationError: {
+      type: String,
+      default: null,
+    },
+    moderatedAt: {
+      type: Date,
+      default: null,
+    },
   },
   { timestamps: true }
 );

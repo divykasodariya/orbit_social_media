@@ -23,7 +23,10 @@ export const minMaxNormalize = (val, min, max) => {
  * 1. Fetch all videos to build the corpus and cache it
  */
 export const buildVideoCorpus = async () => {
-    const videos = await Video.find({ isPublished: true }).lean();
+    const videos = await Video.find({ 
+        isPublished: true, 
+        isShadowBanned: { $ne: true } 
+    }).lean();
     
     const documents = [];
     const videoDataMap = {};

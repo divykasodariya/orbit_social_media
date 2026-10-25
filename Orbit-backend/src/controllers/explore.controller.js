@@ -31,8 +31,11 @@ export const getExploreFeed = asyncHandler(async (req, res) => {
 
     const skip = (page - 1) * limit;
 
-    // Fetch popular items with pagination
-    const popularVideos = await Video.find({ isPublished: true })
+    // Fetch popular items with pagination (excluding shadow banned videos)
+    const popularVideos = await Video.find({ 
+        isPublished: true,
+        isShadowBanned: { $ne: true }
+    })
         .populate("owner", "fullName username avatar")
         .sort({ views: -1, createdAt: -1 })
         .skip(skip)
