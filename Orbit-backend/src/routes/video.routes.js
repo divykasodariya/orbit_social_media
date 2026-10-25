@@ -8,6 +8,7 @@ import {
   getAllUserVideos,
   publishVideo,
   getVideoById,
+  getVideoSubtitles,
   updateVideo,
   deleteVideo,
   togglePublishStatus,
@@ -26,6 +27,9 @@ router.get("/user/videos", verifyJWT, getAllUserVideos);
 
 // 🤖 Recommendations - must be ABOVE /:videoId
 router.get("/recommendations/:videoId", verifyJWT, getVideoRecommendations);
+
+// 📝 Subtitles in WebVTT format for video players (PUBLIC)
+router.get("/:videoId/subtitles.vtt", getVideoSubtitles);
 
 // Watch page (PUBLIC)
 router.get("/:videoId", verifyJWT, getVideoById);

@@ -15,9 +15,10 @@ cloudinary.config({
 /**
  * Upload file to Cloudinary with proper cleanup and error handling
  * @param {string} localFilePath - Path to the local file
+ * @param {boolean} [deleteAfterUpload=true] - Whether to delete the local file immediately after upload
  * @returns {Promise<object|null>} Cloudinary response or null on failure
  */
-const uploadOnCloudinary = async (localFilePath) => {
+const uploadOnCloudinary = async (localFilePath, deleteAfterUpload = true) => {
   try {
     // ✅ Validate input
     if (!localFilePath) {
@@ -38,13 +39,15 @@ const uploadOnCloudinary = async (localFilePath) => {
       timeout: 60000, // ✅ 60 second timeout
     });
 
-    // ✅ Delete temporary file after successful upload
-    try {
-      fs.unlinkSync(localFilePath);
-      console.log(`✅ Uploaded and cleaned up: ${localFilePath}`);
-    } catch (unlinkError) {
-      console.warn(`⚠️ Failed to delete temp file: ${localFilePath}`, unlinkError.message);
-      // Don't fail the upload if cleanup fails
+    // ✅ Delete temporary file after successful upload if requested
+    if (deleteAfterUpload) {
+      try {
+        fs.unlinkSync(localFilePath);
+        console.log(`✅ Uploaded and cleaned up: ${localFilePath}`);
+      } catch (unlinkError) {
+        console.warn(`⚠️ Failed to delete temp file: ${localFilePath}`, unlinkError.message);
+        // Don't fail the upload if cleanup fails
+      }
     }
 
     // ✅ Return response with HTTPS URL guaranteed
@@ -56,8 +59,8 @@ const uploadOnCloudinary = async (localFilePath) => {
   } catch (error) {
     console.error("❌ Cloudinary upload error:", error.message);
 
-    // ✅ Cleanup temp file even on failure
-    if (localFilePath && fs.existsSync(localFilePath)) {
+    // ✅ Cleanup temp file on failure only if deleteAfterUpload was true
+    if (deleteAfterUpload && localFilePath && fs.existsSync(localFilePath)) {
       try {
         fs.unlinkSync(localFilePath);
         console.log(`🗑️ Cleaned up failed upload: ${localFilePath}`);

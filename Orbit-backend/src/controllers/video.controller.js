@@ -6,6 +6,7 @@ import {ApiError} from "../utils/ApiError.js"
 import {ApiResponse} from "../utils/ApiResponse.js"
 import { uploadOnCloudinary, /*deleteOnCloudinary*/ } from "../utils/cloudinary.js"
 import { getRecommendedVideos } from "../services/recommendation/videoRecommendation.service.js";
+import { processVideoTranscription, safeUnlink } from "../services/transcription/index.js";
 
 
 // const getAllVideos = asyncHandler(async (req, res) => {
@@ -368,26 +369,37 @@ const publishVideo = asyncHandler(async (req, res) => {
     }
 
     // 4️⃣ Upload to Cloudinary
-    const videoFile = await uploadOnCloudinary(videoLocalPath);
-    const thumbnail = await uploadOnCloudinary(thumbnailLocalPath);
+    // Note: deleteAfterUpload is false for videoFile so background worker can extract audio locally
+    const videoFile = await uploadOnCloudinary(videoLocalPath, false);
+    const thumbnail = await uploadOnCloudinary(thumbnailLocalPath, true);
 
     if (!videoFile || !thumbnail) {
+        await safeUnlink(videoLocalPath);
         throw new ApiError(400, "Error uploading files to Cloudinary");
     }
 
-    // 5️⃣ Save video in DB
+    // 5️⃣ Save video in DB with pending transcription status
     const video = await Video.create({
         videoFile: videoFile.url,
         thumbnail: thumbnail.url,
         title,
         description,
         duration: videoFile.duration,
-        owner: req.user._id
+        owner: req.user._id,
+        transcription_status: "pending"
     });
 
-    // 6️⃣ Send response
+    // 6️⃣ Dispatch background audio extraction and transcription (non-blocking)
+    setImmediate(() => {
+        processVideoTranscription(video._id, videoLocalPath, { cleanVideoFile: true })
+            .catch((err) => {
+                console.error("[Background Error] Transcription worker failed:", err);
+            });
+    });
+
+    // 7️⃣ Send response immediately without waiting for transcription
     return res.status(201).json(
-        new ApiResponse(201, video, "Video published successfully")
+        new ApiResponse(201, video, "Video published successfully. Subtitle transcription queued.")
     );
 });
 
@@ -583,6 +595,12 @@ const getVideoById = asyncHandler(async (req, res) => {
         duration: video.duration,
         views: video.views,
         createdAt: video.createdAt,
+
+        // Subtitle and transcription details
+        transcript: video.transcript,
+        caption_vtt: video.caption_vtt,
+        transcription_status: video.transcription_status,
+        transcription_error: video.transcription_error,
 
         likesCount,
         isLiked,
@@ -892,11 +910,36 @@ const getVideoRecommendations = asyncHandler(async (req, res) => {
     );
 });
 
+const getVideoSubtitles = asyncHandler(async (req, res) => {
+    const { videoId } = req.params;
+
+    if (!isValidObjectId(videoId)) {
+        throw new ApiError(400, "Invalid video id");
+    }
+
+    const video = await Video.findById(videoId).select("caption_vtt transcription_status");
+
+    if (!video) {
+        throw new ApiError(404, "Video not found");
+    }
+
+    if (!video.caption_vtt) {
+        return res
+            .status(200)
+            .type("text/vtt")
+            .send("WEBVTT\n\n1\n00:00:00.000 --> 00:00:02.000\nNo captions available yet\n");
+    }
+
+    res.set("Content-Type", "text/vtt; charset=utf-8");
+    return res.status(200).send(video.caption_vtt);
+});
+
 export {
     getAllVideos,
     getAllUserVideos,
     publishVideo,
     getVideoById,
+    getVideoSubtitles,
     updateVideo,
     deleteVideo,
     togglePublishStatus,
