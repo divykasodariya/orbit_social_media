@@ -166,12 +166,10 @@ export default function ContentAdvisoryBanner({ advisory }) {
   };
 
   const currentTheme = themeMap[category] || themeMap.default;
-  const CategoryIcon = currentTheme.icon;
 
-  // Default fallback titles if LLM didn't provide one
   const defaultTitleMap = {
     medical: "Health Information Notice",
-    financial: "Financial Advisory Notice",
+    financial: "Financial Disclaimer",
     legal: "Legal Disclaimer",
     pseudoscience: "Unverified Scientific Claims",
     conspiracy: "Unverified Claims Advisory",
@@ -182,59 +180,54 @@ export default function ContentAdvisoryBanner({ advisory }) {
     environmental_misinformation: "Environmental Claims Notice",
   };
 
-  const title = advisory.disclaimerTitle || defaultTitleMap[category] || "Content Advisory";
-  const message =
-    advisory.disclaimerMessage ||
-    "The speaker makes authoritative claims that are unverified. Orbit advises viewers to consult accredited professionals before taking any action.";
+  const isFinancial = category === "financial";
+  const title = isFinancial
+    ? "Financial Disclaimer"
+    : (advisory.disclaimerTitle || defaultTitleMap[category] || "Content Advisory");
+
+  const financialMessage =
+    "The information provided is for educational purposes only and is not personalized financial advice. Consult a qualified financial professional before making investment decisions.";
+
+  const message = isFinancial
+    ? financialMessage
+    : (advisory.disclaimerMessage ||
+       currentTheme.whyText ||
+       "The speaker makes authoritative claims that are unverified. Orbit advises viewers to consult accredited professionals before taking any action.");
+
+  const whyText =
+    currentTheme.whyText ||
+    "This video contains authoritative claims that have not been independently corroborated. Orbit recommends consulting qualified professionals and accredited sources before acting on this information.";
 
   return (
     <div
       role="alert"
-      className={`relative w-full rounded-xl border p-4 mb-4 shadow-sm transition-all animate-[cardIn_0.35s_ease-out] ${currentTheme.containerBg}`}
+      className="relative w-full rounded-xl border border-blue-200/90 bg-blue-50/40 px-3.5 py-2.5 mb-3 shadow-2xs transition-all animate-[cardIn_0.35s_ease-out]"
     >
-      <div className="flex items-start gap-3">
-        {/* Leading icon */}
-        <div className="p-2 rounded-lg bg-white/80 shadow-xs flex-shrink-0 mt-0.5">
-          <CategoryIcon className={`w-5 h-5 ${currentTheme.accentIcon}`} />
+      <div className="flex items-start gap-2.5">
+        {/* Small warning icon */}
+        <div className="mt-0.5 flex-shrink-0 text-amber-600">
+          <AlertTriangle className="w-4 h-4" />
         </div>
 
         {/* Content body */}
         <div className="flex-1 min-w-0 pr-6">
-          <div className="flex items-center gap-2 flex-wrap mb-1">
-            <span
-              className={`text-[11px] font-semibold tracking-wider uppercase px-2 py-0.5 rounded-full border ${currentTheme.badgeColor}`}
-            >
-              {currentTheme.label}
-            </span>
-
-            {risk === "high" && (
-              <span className="text-[11px] font-semibold tracking-wide uppercase px-2 py-0.5 rounded-full bg-red-600 text-white shadow-xs">
-                High Caution
-              </span>
-            )}
-            {risk === "medium" && (
-              <span className="text-[11px] font-semibold tracking-wide uppercase px-2 py-0.5 rounded-full bg-amber-500 text-white shadow-xs">
-                Verify Before Acting
-              </span>
-            )}
-          </div>
-
-          <h3 className={`text-sm font-bold leading-tight ${currentTheme.titleColor}`}>
+          <h3 className="text-xs sm:text-sm font-semibold text-gray-900 leading-tight">
             {title}
           </h3>
 
-          <p className={`text-xs mt-1 leading-relaxed ${currentTheme.bodyColor}`}>
+          <p className="text-xs text-gray-600 leading-relaxed mt-0.5">
             {message}
           </p>
 
-          {/* Expandable Explanation */}
-          <div className="mt-2">
+          {/* Subtle expandable secondary action */}
+          <div className="mt-1">
             <button
+              type="button"
               onClick={() => setIsExpanded((prev) => !prev)}
-              className="inline-flex items-center gap-1 text-[11px] font-semibold text-gray-700 hover:text-black transition"
+              className="inline-flex items-center gap-1 text-[11px] font-medium text-gray-500 hover:text-blue-700 transition"
             >
-              <Info className="w-3.5 h-3.5" />
-              <span>{isExpanded ? "Hide safety notice details" : "Why am I seeing this notice?"}</span>
+              <Info className="w-3 h-3 text-blue-400" />
+              <span>{isExpanded ? "Hide details" : "Why am I seeing this notice?"}</span>
               {isExpanded ? (
                 <ChevronUp className="w-3 h-3" />
               ) : (
@@ -243,23 +236,22 @@ export default function ContentAdvisoryBanner({ advisory }) {
             </button>
 
             {isExpanded && (
-              <div className="mt-2 p-2.5 rounded-lg bg-white/70 border border-gray-200/70 text-xs text-gray-700 leading-relaxed animate-[fadeIn_0.2s_ease-out]">
-                <p>{currentTheme.whyText}</p>
-                <p className="mt-1.5 text-[11px] text-gray-500 font-medium">
-                  Automated content safety inspection powered by Orbit AI
-                </p>
+              <div className="mt-1.5 p-2.5 rounded-lg bg-white/90 border border-blue-100 text-xs text-gray-600 leading-relaxed animate-[fadeIn_0.2s_ease-out]">
+                <p>{whyText}</p>
               </div>
             )}
           </div>
         </div>
 
-        {/* Close / Dismiss */}
+        {/* Dismiss button */}
         <button
+          type="button"
           onClick={() => setIsDismissed(true)}
-          title="Dismiss advisory"
-          className="absolute top-3 right-3 p-1 rounded-md text-gray-500 hover:text-gray-900 hover:bg-black/5 transition"
+          title={`Dismiss ${title}`}
+          aria-label={`Dismiss ${title.toLowerCase()}`}
+          className="absolute top-2.5 right-2.5 z-10 p-1 rounded-md text-gray-400 hover:text-gray-700 hover:bg-blue-100/50 cursor-pointer transition"
         >
-          <X className="w-4 h-4" />
+          <X className="w-3.5 h-3.5" />
         </button>
       </div>
     </div>

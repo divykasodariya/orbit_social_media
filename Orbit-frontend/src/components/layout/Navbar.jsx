@@ -64,10 +64,12 @@ const Navbar = ({ onMenuClick }) => {
           <div className="flex items-center gap-3">
             <button
               onClick={onMenuClick}
-              className="md:hidden p-2 rounded hover:bg-gray-100
+              className="p-2 rounded-lg hover:bg-gray-100 text-gray-700
               transition transform hover:scale-105 active:scale-95"
+              title="Toggle sidebar"
+              aria-label="Toggle navigation"
             >
-              <Menu />
+              <Menu size={20} />
             </button>
 
             <Link to="/" className="flex items-center gap-2">
