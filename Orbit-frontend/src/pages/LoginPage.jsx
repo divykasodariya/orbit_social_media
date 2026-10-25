@@ -6,6 +6,7 @@ import { useState } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { Video } from "lucide-react";
+import logo from "../assets/Logo.png";
 
 const LoginPage = () => {
   const navigate = useNavigate();
@@ -74,16 +75,9 @@ const LoginPage = () => {
     >
       <div className="w-full max-w-md animate-[slideUp_0.4s_ease-out]">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center gap-2 mb-4">
-            <div
-              className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600
-              rounded-xl flex items-center justify-center
-              transition-transform duration-300 hover:scale-105"
-            >
-              <Video className="text-white" />
-            </div>
-            <span className="text-3xl font-bold">Orbit</span>
-          </div>
+          <Link to="/" className="inline-flex items-center justify-center mb-4 transition-transform duration-200 hover:scale-105">
+            <img src={logo} alt="Orbit" className="h-12 w-auto object-contain" />
+          </Link>
           <h1 className="text-2xl font-bold">Welcome back</h1>
           <p className="text-gray-600">Sign in to continue</p>
         </div>

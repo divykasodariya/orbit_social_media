@@ -14,13 +14,11 @@ const getGroqClient = () => {
   return groqClient;
 };
 
-// Models in preference order (supports 120B flagship and 27B high-speed models)
+// Models in preference order (only verified working endpoints on current Groq tier)
 const CANDIDATE_MODELS = [
   process.env.ANALYSIS_MODEL || "openai/gpt-oss-120b",
   "qwen/qwen3.8-27b",
   "openai/gpt-oss-20b",
-  "llama-3.3-70b-versatile",
-  "llama-3.1-8b-instant",
 ];
 
 /**
@@ -33,15 +31,15 @@ const ANALYSIS_SYSTEM_PROMPT = `You are "Orbit AI Analyst", an advanced content 
 
 Given a video's Title, Description, and Timestamped Transcript, you MUST perform ALL of the following tasks in a SINGLE response:
 
-═══════════════════════════════════════
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 TASK 1: SUMMARY & KEY POINTS
-═══════════════════════════════════════
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 - "tldr": A crisp 2-sentence executive summary of the video.
 - "keyPoints": An array of 3-5 concise, actionable takeaway bullet points (each a single sentence).
 
-═══════════════════════════════════════
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 TASK 2: SMART CHAPTERS
-═══════════════════════════════════════
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 - "chapters": An array of chapter objects representing the major topic shifts in the video.
   Each chapter must have:
   - "timestamp": the start time in seconds (integer)
@@ -51,31 +49,94 @@ TASK 2: SMART CHAPTERS
 - The first chapter should always start at timestamp 0.
 - Use the timestamps from the transcript segments to determine accurate chapter boundaries.
 
-═══════════════════════════════════════
-TASK 3: ADVISORY / SENSITIVE CLAIMS DETECTION
-═══════════════════════════════════════
-Detect if the speaker makes authoritative claims in these categories WITHOUT proper accredited disclaimers:
-- Medical/Health: Prescribing treatments, cures, diagnoses, or telling viewers to stop medications.
-- Financial: Promising specific returns, guaranteed profits, or investment schemes.
-- Legal: Providing specific legal advice as if licensed.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TASK 3: CONTENT ADVISORY DETECTION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Detect if the speaker makes authoritative, unverified, or potentially harmful claims in ANY of the following categories. Be thorough — do NOT miss subtle or indirect claims.
 
-If such claims are detected:
-- "hasAdvisory": true
-- "category": one of "medical", "financial", "legal"
-- "riskLevel": "high" (dangerous if followed), "medium" (potentially misleading), or "low" (minor concern)
-- "disclaimerTitle": A short title like "Health Information Notice" or "Financial Advice Disclaimer"
-- "disclaimerMessage": A 1-2 sentence warning message for viewers (professional, neutral tone).
+ADVISORY CATEGORIES:
+■ medical
+  Speaker makes health or medical recommendations with authority, regardless of whether they claim formal credentials.
+  Includes:
+  - Claiming to be a doctor, nurse, nutritionist, or healthcare professional and giving specific health advice
+  - Telling viewers to start, stop, or change medications or treatments
+  - Recommending specific diets, supplements, or remedies for medical conditions with certainty
+  - Any specific health action advice framed as expert guidance without an explicit "consult your doctor" disclaimer
+  Rule: If the speaker gives specific health action recommendations without an explicit disclaimer to consult a licensed physician, flag it.
+  Risk level: high for dangerous advice (stop medications, miracle cures), medium for diet/supplement advice without disclaimers, low for general wellness tips from self-proclaimed experts.
+  Example 1: "I’m a doctor and you should drink colloidal silver instead of antibiotics."
+  Example 2: "As a nutritionist, here are the 11 foods I recommend everyone eat daily for optimal health."
+  Example 3: "Stop eating seed oils immediately — they’re the root cause of every chronic disease."
 
-If the content is safe or already includes proper disclaimers:
-- "hasAdvisory": false
-- "category": "none"
-- "riskLevel": "none"
-- "disclaimerTitle": null
-- "disclaimerMessage": null
+■ financial
+  Anyone giving specific investment, trading, or financial planning advice without a proper licensed financial advisor disclaimer.
+  This includes BOTH scam-style content AND well-intentioned educational content from self-proclaimed experts.
+  Includes:
+  - "Ex-banker", "ex-trader", "financial coach", or "investor" giving specific buy/sell/hold recommendations
+  - Promising specific returns or guaranteed profits ("this stock will 3x")
+  - Advising viewers what to do with their savings, retirement funds, or portfolio without disclaimers
+  - Crypto, NFT, or real estate investment tutorials framed as actionable advice
+  - Ponzi schemes, pyramid schemes, or rug-pull language
+  - Insider trading tips or "secret" investment strategies
+  Rule: If the speaker gives specific financial action recommendations ("you should buy X", "invest in Y", "put your money in Z") without an explicit "this is not financial advice" disclaimer, flag it.
+  Risk level: high for scams/guaranteed returns, medium for expert-framed tutorials without disclaimers, low for general financial education with partial disclaimers.
+  Example 1: "Put all your savings into this token, it will 100x by next month."
+  Example 2: "As an ex-banker, here's exactly where I would put my money right now in 2026."
+  Example 3: "You should have 60% in index funds and 20% in real estate — trust me, this is what wealthy people do."
 
-═══════════════════════════════════════
-OUTPUT FORMAT (strict JSON)
-═══════════════════════════════════════
+■ legal
+  Providing specific legal advice as if licensed, advising people to take specific legal actions without consulting a lawyer.
+  Example: "You don’t need a lawyer for this, just sign the contract yourself."
+
+■ pseudoscience
+  Claims that contradict established scientific consensus without credible basis.
+  Includes: flat earth, anti-vaccination, moon landing denial, chemtrails, crystal healing as cure, astrology as fact.
+  Example: "Vaccines contain microchips and the government is using 5G to activate them."
+
+■ conspiracy
+  Presenting unverified conspiracy theories as fact that could incite distrust, fear, or harmful action.
+  Includes: deep state narratives, election fraud claims without evidence, crisis actor accusations, shadow government theories.
+  Example: "The shooting was staged, those were all crisis actors hired by the globalists."
+
+■ spiritual_religious
+  Making authoritative spiritual, religious, or supernatural claims that could lead viewers to make dangerous real-world decisions.
+  Includes: faith healing instead of medicine, exorcism as psychiatric treatment, cult recruitment framing.
+  Example: "God told me you must stop your chemotherapy and pray instead."
+
+■ nutrition_supplement
+  Promoting unverified diets, supplements, detoxes, or miracle cures without scientific backing and with authoritative certainty.
+  Includes: MLM supplement promotion, extreme fasting protocols promoted as cures, dangerous diet advice.
+  Example: "This $99/month cleanse will detox your liver and cure your autoimmune disease."
+
+■ safety_security
+  Providing instructions or encouragement for activities that endanger physical safety or cybersecurity.
+  Includes: unsafe electrical/structural DIY, hacking guides presented non-educationally, dangerous vehicle modifications.
+  Example: "Here’s how to bypass your car’s safety systems for more speed."
+
+■ political_misinformation
+  Presenting false political facts, fabricated quotes by public figures, or unverified election/policy claims as established truth.
+  Example: "The president signed a secret executive order to confiscate all firearms next Tuesday."
+
+■ environmental_misinformation
+  Denying well-established environmental science or promoting actions with significant false ecological claims.
+  Example: "Climate change is a hoax invented by scientists for grant money."
+
+DETECTION RULES:
+- Flag advisory when the speaker presents claims with authority OR frames content as actionable guidance — even if the content seems educational or well-intentioned.
+- An "ex-banker", "ex-doctor", "nutritionist", "coach", or "investor" giving specific recommendations IS an authoritative framing — flag it.
+- Educational content that ONLY presents factual information without specific action recommendations is NOT flagged.
+- If the speaker explicitly includes a clear disclaimer ("consult a licensed professional", "this is not financial/medical advice") AND does not override it with specific recommendations, lower the riskLevel to low or don't flag.
+- If the speaker adds a disclaimer BUT still gives specific recommendations, still flag it with medium risk.
+- If content is safe with proper full disclaimers and no actionable recommendations: hasAdvisory = false.
+
+RISK LEVELS:
+- high: Dangerous if followed, could cause direct physical/financial/psychological harm.
+- medium: Potentially misleading, needs professional verification before acting on it.
+- low: Minor concern, informational imbalance but unlikely to cause direct harm.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+OUTPUT FORMAT (strict JSON only — no markdown, no extra text)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 {
   "tldr": "...",
   "keyPoints": ["...", "..."],
@@ -96,7 +157,10 @@ IMPORTANT RULES:
 - Always respond in STRICT valid JSON. No markdown, no explanation, only JSON.
 - If the transcript is very short or empty, still provide a best-effort summary from the title and description.
 - Chapter timestamps must be integers (seconds).
-- Be conservative with advisory flags: only flag genuine authoritative claims, not casual opinions.`;
+- For advisory: pick the MOST SEVERE category if multiple apply. Use "none" only when truly clean.
+- disclaimerTitle: Short, professional title (e.g., "Health Information Notice", "Financial Risk Warning", "Unverified Claims Advisory").
+- disclaimerMessage: 1-2 sentences. Neutral, professional tone. Guide viewers to seek professional verification.
+- Be conservative with advisory: only flag genuine authoritative claims with certitude, not casual opinions or clear satire.`;
 
 const MAX_PROMPT_CHARS = 12000; // ~3000 tokens, safe for Groq 7,000-8,000 TPM limit
 
@@ -226,7 +290,7 @@ export const analyzeVideoContent = async ({
 
       // Sanitize advisory
       const advisory = parsed.advisory || {};
-      const validCategories = ["medical", "financial", "legal", "none"];
+      const validCategories = ["medical", "financial", "legal", "pseudoscience", "conspiracy", "spiritual_religious", "nutrition_supplement", "safety_security", "political_misinformation", "environmental_misinformation", "none"];
       const validRiskLevels = ["high", "medium", "low", "none"];
 
       const result = {

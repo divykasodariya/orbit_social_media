@@ -272,247 +272,275 @@ const handleSubscribe = async () => {
 
   return (
     <>
-      <div className="flex flex-col lg:flex-row gap-6 animate-[fadeIn_0.35s_ease-out]">
-        {/* LEFT */}
-        <div className="flex-1">
-          <div
-            className="bg-black aspect-video rounded-xl mb-4
-            overflow-hidden animate-[cardIn_0.4s_ease-out]"
-          >
-            <video
-              ref={setPlayerRef}
-              src={video.videoFile}
-              controls
-              autoPlay
-              className="w-full h-full"
-              onTimeUpdate={(e) => setCurrentPlaybackTime(e.target.currentTime)}
-              onPlay={(e) => {
-                if (suppressSyncRef.current) return;
-                coWatch.sendSync('play', e.target.currentTime);
-              }}
-              onPause={(e) => {
-                if (suppressSyncRef.current) return;
-                coWatch.sendSync('pause', e.target.currentTime);
-              }}
-              onSeeked={(e) => {
-                if (suppressSyncRef.current) return;
-                coWatch.sendSync('seek', e.target.currentTime);
-              }}
-            >
-              {subtitleBlobUrl && captionsEnabled && (
-                <track
-                  kind="subtitles"
-                  label="English (Auto-generated)"
-                  src={subtitleBlobUrl}
-                  srcLang="en"
-                  default
-                />
-              )}
-            </video>
-          </div>
-
-          {/* AI Content Advisory Notice (Fake Doctor / Unverified Medical & Financial Claims) */}
-          <ContentAdvisoryBanner advisory={video.aiAdvisory} />
-
-          <h1 className="text-xl font-bold mb-1">
-            {video.title}
-          </h1>
-
-          <Link
-            to={`/channel/${channel.username}`}
-            className="text-sm text-gray-600 hover:text-gray-900 transition"
-          >
-            {channel.fullName}
-          </Link>
-
-          <p className="text-sm text-gray-600 mb-4">
-            {formatViews(video.views)} views •{" "}
-            {formatDate(video.createdAt)}
-          </p>
-
-          <div className="flex items-center gap-4 mb-6 flex-wrap">
-            <Link to={`/channel/${channel.username}`}>
-              <img
-                src={channel.avatar}
-                alt={channel.fullName}
-                className="w-10 h-10 rounded-full
-                transition-transform hover:scale-105"
-              />
-            </Link>
-
-            <button
-              onClick={handleLike}
-              className={`flex items-center gap-2 px-4 py-2 rounded-full
-              transition-all active:scale-[0.97] ${
-                isLiked
-                  ? "bg-blue-600 text-white"
-                  : "bg-gray-100 text-gray-800"
-              }`}
-            >
-              <ThumbsUp size={18} />
-              {likesCount}
-            </button>
-
-            {isAuthenticated && (
-              <button
-                onClick={() => {
-                  setShowPlaylistModal(true);
-                  loadPlaylists();
+      <div className="max-w-[1720px] mx-auto w-full animate-[fadeIn_0.35s_ease-out]">
+        <div className="flex flex-col lg:flex-row gap-5 xl:gap-6 items-stretch">
+          {/* ── LEFT: MAIN VIDEO & CONTENT COLUMN ── */}
+          <div className="flex-1 min-w-0 w-full space-y-4">
+            {/* Video Player Container */}
+            <div className="bg-black aspect-video rounded-2xl overflow-hidden shadow-sm w-full relative group animate-[cardIn_0.4s_ease-out]">
+              <video
+                ref={setPlayerRef}
+                src={video.videoFile}
+                controls
+                autoPlay
+                className="w-full h-full object-contain"
+                onTimeUpdate={(e) => setCurrentPlaybackTime(e.target.currentTime)}
+                onPlay={(e) => {
+                  if (suppressSyncRef.current) return;
+                  coWatch.sendSync('play', e.target.currentTime);
                 }}
-                className="flex items-center gap-2 px-4 py-2 rounded-full
-                bg-gray-100 transition hover:bg-gray-200"
+                onPause={(e) => {
+                  if (suppressSyncRef.current) return;
+                  coWatch.sendSync('pause', e.target.currentTime);
+                }}
+                onSeeked={(e) => {
+                  if (suppressSyncRef.current) return;
+                  coWatch.sendSync('seek', e.target.currentTime);
+                }}
               >
-                <Bookmark size={18} />
-                Save
-              </button>
-            )}
-
-            {video.caption_vtt && (
-              <button
-                onClick={() => setCaptionsEnabled((p) => !p)}
-                title={captionsEnabled ? "Disable subtitles" : "Enable subtitles"}
-                className={`flex items-center gap-1.5 px-3.5 py-2 rounded-full text-xs font-semibold
-                transition-all active:scale-[0.97] ${
-                  captionsEnabled
-                    ? "bg-blue-600 text-white shadow-xs"
-                    : "bg-gray-100 text-gray-800 hover:bg-gray-200"
-                }`}
-              >
-                <Subtitles size={16} />
-                CC
-              </button>
-            )}
-
-            <button
-              disabled={isOwnVideo}
-              onClick={!isOwnVideo ? handleSubscribe : undefined}
-              className={`flex items-center gap-2 px-4 py-2 rounded-full
-              transition-all active:scale-[0.97] ${
-                isOwnVideo
-                  ? "bg-gray-100 text-gray-400"
-                  : isSubscribed
-                  ? "bg-gray-200"
-                  : "bg-blue-600 text-white hover:bg-blue-700"
-              }`}
-            >
-              <Bell size={16} />
-              {isOwnVideo
-                ? "Your channel"
-                : isSubscribed
-                ? "Subscribed"
-                : "Subscribe"}
-            </button>
-          </div>
-
-          <div
-            className="bg-gray-100 p-4 rounded-xl mb-6
-            animate-[cardIn_0.35s_ease-out]"
-          >
-            <p className={!showFullDesc ? "line-clamp-3" : ""}>
-              {video.description}
-            </p>
-
-            {video.description.length > 150 && (
-              <button
-                onClick={() => setShowFullDesc((p) => !p)}
-                className="mt-2 text-sm text-blue-600"
-              >
-                {showFullDesc ? "Show less" : "Show more"}
-              </button>
-            )}
-          </div>
-
-          {/* AI Video Hub: TL;DR Summary, Key Points, Chapters, Interactive Transcript, & Copilot */}
-          <AiVideoHub
-            video={video}
-            currentTime={currentPlaybackTime}
-            onSeek={handleSeek}
-            isOwner={isOwnVideo}
-          />
-
-          <h2 className="font-semibold mb-4">
-            {comments.length} Comments
-          </h2>
-
-          {isAuthenticated && (
-            <div className="mb-4 flex gap-2">
-              <input
-                value={newComment}
-                onChange={(e) => setNewComment(e.target.value)}
-                className="flex-1 border rounded px-3 py-2"
-                placeholder="Add a comment..."
-              />
-              <button
-                onClick={handleAddComment}
-                className="px-4 py-2 bg-blue-600 text-white
-                rounded transition hover:bg-blue-700"
-              >
-                Comment
-              </button>
-            </div>
-          )}
-
-          <div className="space-y-4">
-            {comments.map((comment, i) => (
-              <div
-                key={comment._id}
-                style={{ animationDelay: `${i * 0.03}s` }}
-                className="animate-[cardIn_0.3s_ease-out]"
-              >
-                <CommentItem
-                  comment={comment}
-                  canModify={
-                    user?._id === comment.commentor._id
-                  }
-                  onUpdate={handleUpdateComment}
-                  onDelete={handleDeleteComment}
-                  onLike={() =>
-                    handleCommentLike(comment._id)
-                  }
-                />
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* RIGHT SIDEBAR */}
-        <div className="block lg:hidden border-t my-6" />
-
-        <div className="lg:w-96 space-y-4">
-
-          {/* ── Co-Watch Panel (visible in right sidebar ONLY when active in a room) ── */}
-          {isAuthenticated && coWatch.status === "in-room" && (
-            <CoWatchPanel coWatch={coWatch} videoTitle={video?.title} />
-          )}
-
-          {relatedVideos.length === 0 ? (
-            // Skeleton placeholders while loading
-            [...Array(5)].map((_, i) => (
-              <div key={i} className="flex gap-3 animate-pulse">
-                <div className="w-40 h-24 bg-gray-200 rounded-lg flex-shrink-0" />
-                <div className="flex-1 space-y-2 pt-1">
-                  <div className="h-3 bg-gray-200 rounded w-full" />
-                  <div className="h-3 bg-gray-200 rounded w-3/4" />
-                  <div className="h-3 bg-gray-200 rounded w-1/2" />
-                </div>
-              </div>
-            ))
-          ) : (
-            relatedVideos.map((v, i) => (
-              <div
-                key={v._id}
-                style={{ animationDelay: `${i * 0.04}s` }}
-                className="animate-[cardIn_0.35s_ease-out]"
-              >
-                {v._recommendationReason && (
-                  <p className="text-xs text-blue-500 font-medium mb-1 pl-1">
-                    ✦ {v._recommendationReason}
-                  </p>
+                {subtitleBlobUrl && captionsEnabled && (
+                  <track
+                    kind="subtitles"
+                    label="English (Auto-generated)"
+                    src={subtitleBlobUrl}
+                    srcLang="en"
+                    default
+                  />
                 )}
-                <VideoCard video={v} layout="list" />
+              </video>
+            </div>
+
+            {/* AI Content Advisory Notice (if flagged) */}
+            <ContentAdvisoryBanner advisory={video.aiAdvisory} />
+
+            {/* Video Title */}
+            <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900 tracking-tight leading-snug">
+              {video.title}
+            </h1>
+
+            {/* Channel Info & Video Action Bar */}
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-1 pb-3 border-b border-gray-200/80">
+              {/* Left: Channel Avatar, Name, and Subscribe Button */}
+              <div className="flex items-center gap-3">
+                <Link to={`/channel/${channel.username}`} className="flex-shrink-0">
+                  <img
+                    src={channel.avatar}
+                    alt={channel.fullName}
+                    className="w-10 h-10 sm:w-11 sm:h-11 rounded-full object-cover ring-2 ring-gray-100 hover:ring-blue-400 transition-all duration-200"
+                    onError={(e) => {
+                      e.target.src = "https://via.placeholder.com/44?text=?";
+                    }}
+                  />
+                </Link>
+
+                <div className="min-w-0">
+                  <Link
+                    to={`/channel/${channel.username}`}
+                    className="font-bold text-sm sm:text-base text-gray-900 hover:text-blue-600 transition block truncate leading-tight"
+                  >
+                    {channel.fullName}
+                  </Link>
+                  <span className="text-xs text-gray-500 block truncate">
+                    @{channel.username}
+                  </span>
+                </div>
+
+                <button
+                  disabled={isOwnVideo}
+                  onClick={!isOwnVideo ? handleSubscribe : undefined}
+                  className={`ml-2 flex items-center gap-1.5 px-4 py-2 rounded-full text-xs sm:text-sm font-semibold transition-all active:scale-95 ${
+                    isOwnVideo
+                      ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                      : isSubscribed
+                      ? "bg-gray-200 text-gray-800 hover:bg-gray-300"
+                      : "bg-blue-600 text-white hover:bg-blue-700 shadow-xs"
+                  }`}
+                >
+                  <Bell size={16} />
+                  <span>{isOwnVideo ? "Your channel" : isSubscribed ? "Subscribed" : "Subscribe"}</span>
+                </button>
               </div>
-            ))
-          )}
+
+              {/* Right: Actions (Like, Save to playlist, Captions) */}
+              <div className="flex items-center gap-2 sm:gap-2.5 flex-wrap">
+                <button
+                  onClick={handleLike}
+                  className={`flex items-center gap-2 px-3.5 sm:px-4 py-2 rounded-full text-xs sm:text-sm font-semibold transition-all active:scale-95 ${
+                    isLiked
+                      ? "bg-blue-600 text-white shadow-xs"
+                      : "bg-gray-100 text-gray-800 hover:bg-gray-200"
+                  }`}
+                >
+                  <ThumbsUp size={16} />
+                  <span>{likesCount}</span>
+                </button>
+
+                {isAuthenticated && (
+                  <button
+                    onClick={() => {
+                      setShowPlaylistModal(true);
+                      loadPlaylists();
+                    }}
+                    className="flex items-center gap-2 px-3.5 sm:px-4 py-2 rounded-full text-xs sm:text-sm font-semibold bg-gray-100 text-gray-800 hover:bg-gray-200 transition-all active:scale-95"
+                  >
+                    <Bookmark size={16} />
+                    <span>Save</span>
+                  </button>
+                )}
+
+                {video.caption_vtt && (
+                  <button
+                    onClick={() => setCaptionsEnabled((p) => !p)}
+                    title={captionsEnabled ? "Disable subtitles" : "Enable subtitles"}
+                    className={`flex items-center gap-1.5 px-3 sm:px-3.5 py-2 rounded-full text-xs font-semibold transition-all active:scale-95 ${
+                      captionsEnabled
+                        ? "bg-blue-600 text-white shadow-xs"
+                        : "bg-gray-100 text-gray-800 hover:bg-gray-200"
+                    }`}
+                  >
+                    <Subtitles size={16} />
+                    <span>CC</span>
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Video Description Card */}
+            <div className="bg-gray-100/80 hover:bg-gray-100 p-4 rounded-2xl transition-colors animate-[cardIn_0.35s_ease-out]">
+              <div className="flex items-center gap-2 text-xs sm:text-sm font-semibold text-gray-800 mb-1.5">
+                <span>{formatViews(video.views)} views</span>
+                <span>•</span>
+                <span>{formatDate(video.createdAt)}</span>
+              </div>
+
+              <p className={`text-xs sm:text-sm text-gray-700 leading-relaxed whitespace-pre-line ${!showFullDesc ? "line-clamp-3" : ""}`}>
+                {video.description}
+              </p>
+
+              {video.description && video.description.length > 140 && (
+                <button
+                  onClick={() => setShowFullDesc((p) => !p)}
+                  className="mt-2 text-xs sm:text-sm font-bold text-gray-900 hover:text-blue-600 transition"
+                >
+                  {showFullDesc ? "Show less" : "...more"}
+                </button>
+              )}
+            </div>
+
+            {/* AI Video Hub: TL;DR Summary, Key Points, Chapters, Interactive Transcript, & Copilot */}
+            <AiVideoHub
+              video={video}
+              currentTime={currentPlaybackTime}
+              onSeek={handleSeek}
+              isOwner={isOwnVideo}
+            />
+
+            {/* Comments Section */}
+            <div className="pt-2">
+              <h2 className="font-bold text-base sm:text-lg text-gray-900 mb-4">
+                {comments.length} Comments
+              </h2>
+
+              {isAuthenticated && (
+                <div className="mb-6 flex gap-3 items-center">
+                  <img
+                    src={user?.avatar || "https://via.placeholder.com/40"}
+                    alt="avatar"
+                    className="w-9 h-9 rounded-full object-cover flex-shrink-0 ring-1 ring-gray-200"
+                  />
+                  <div className="flex-1 flex gap-2">
+                    <input
+                      value={newComment}
+                      onChange={(e) => setNewComment(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && !e.shiftKey) {
+                          e.preventDefault();
+                          handleAddComment();
+                        }
+                      }}
+                      className="flex-1 bg-white border border-gray-200 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                      placeholder="Add a comment..."
+                    />
+                    <button
+                      onClick={handleAddComment}
+                      disabled={!newComment.trim()}
+                      className="px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-xl transition hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed active:scale-95"
+                    >
+                      Comment
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <div className="space-y-4">
+                {comments.map((comment, i) => (
+                  <div
+                    key={comment._id}
+                    style={{ animationDelay: `${i * 0.03}s` }}
+                    className="animate-[cardIn_0.3s_ease-out]"
+                  >
+                    <CommentItem
+                      comment={comment}
+                      canModify={user?._id === comment.commentor?._id}
+                      onUpdate={handleUpdateComment}
+                      onDelete={handleDeleteComment}
+                      onLike={() => handleCommentLike(comment._id)}
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* ── RIGHT: STICKY RECOMMENDATIONS COLUMN ── */}
+          <aside className="w-full lg:w-[340px] xl:w-[380px] 2xl:w-[420px] lg:flex-shrink-0 lg:self-stretch">
+            <div className="lg:sticky lg:top-20 lg:max-h-[calc(100vh-6rem)] lg:overflow-y-auto space-y-3.5 pr-1 custom-scrollbar">
+              {/* Co-Watch Panel (visible in right sidebar ONLY when active in a room) */}
+              {isAuthenticated && coWatch.status === "in-room" && (
+                <CoWatchPanel coWatch={coWatch} videoTitle={video?.title} />
+              )}
+
+              {/* Sidebar Header */}
+              <div className="flex items-center justify-between pb-1">
+                <h2 className="font-bold text-sm sm:text-base text-gray-900">
+                  Up Next
+                </h2>
+                <span className="text-xs text-gray-500 font-medium">
+                  {relatedVideos.length} recommendations
+                </span>
+              </div>
+
+              {relatedVideos.length === 0 ? (
+                // Skeleton placeholders while loading
+                [...Array(6)].map((_, i) => (
+                  <div key={i} className="flex gap-3 animate-pulse">
+                    <div className="w-36 sm:w-40 xl:w-44 aspect-video bg-gray-200 rounded-xl flex-shrink-0" />
+                    <div className="flex-1 space-y-2 pt-1">
+                      <div className="h-3.5 bg-gray-200 rounded w-full" />
+                      <div className="h-3 bg-gray-200 rounded w-3/4" />
+                      <div className="h-3 bg-gray-200 rounded w-1/2" />
+                    </div>
+                  </div>
+                ))
+              ) : (
+                relatedVideos.map((v, i) => (
+                  <div
+                    key={v._id}
+                    style={{ animationDelay: `${i * 0.04}s` }}
+                    className="animate-[cardIn_0.35s_ease-out]"
+                  >
+                    {v._recommendationReason && (
+                      <p className="text-[11px] text-blue-600 font-semibold mb-1 pl-1 flex items-center gap-1">
+                        <span>✦</span>
+                        <span className="truncate">{v._recommendationReason}</span>
+                      </p>
+                    )}
+                    <VideoCard video={v} layout="list" />
+                  </div>
+                ))
+              )}
+            </div>
+          </aside>
         </div>
       </div>
 

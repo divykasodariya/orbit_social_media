@@ -280,11 +280,8 @@ export default function AiVideoHub({ video, currentTime = 0, onSeek, isOwner = f
               <Sparkles className="w-4 h-4" />
             </div>
             <div>
-              <h2 className="text-sm font-bold text-gray-900 flex items-center gap-1.5">
+              <h2 className="text-sm font-bold text-gray-900">
                 Orbit AI Intelligence
-                <span className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700">
-                  Groq AI
-                </span>
               </h2>
             </div>
           </div>
