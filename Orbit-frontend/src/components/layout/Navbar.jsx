@@ -12,6 +12,7 @@ import {
 import { useAuth } from "../../context/AuthContext";
 import { useEffect, useRef, useState } from "react";
 import CoWatchNavButton from "../cowatch/CoWatchNavButton";
+import logo from "../../assets/Logo.png";
 
 const Navbar = ({ onMenuClick }) => {
   const { user, isAuthenticated, logout } = useAuth();
@@ -72,14 +73,12 @@ const Navbar = ({ onMenuClick }) => {
               <Menu size={20} />
             </button>
 
-            <Link to="/" className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-blue-600 text-white rounded-lg
-                flex items-center justify-center font-bold">
-                X
-              </div>
-              <span className="text-xl font-bold hidden sm:block">
-                Orbit
-              </span>
+            <Link to="/" className="flex items-center" title="Orbit">
+              <img
+                src={logo}
+                alt="Orbit"
+                className="h-7 sm:h-8 w-auto object-contain transition-transform duration-200 hover:scale-[1.02]"
+              />
             </Link>
           </div>
 
