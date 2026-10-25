@@ -25,8 +25,10 @@ import VideoCard from "../components/video/VideoCard";
 import CoWatchPanel from "../components/cowatch/CoWatchPanel";
 import { useCoWatch } from "../hooks/useCoWatch";
 
-import { ThumbsUp, Bell, Bookmark, X } from "lucide-react";
+import { ThumbsUp, Bell, Bookmark, X, Subtitles } from "lucide-react";
 import { formatViews, formatDate } from "../utils/helpers";
+import ContentAdvisoryBanner from "../components/video/ContentAdvisoryBanner";
+import AiVideoHub from "../components/video/AiVideoHub";
 
 const WatchPage = () => {
   const { videoId } = useParams();
@@ -50,6 +52,33 @@ const WatchPage = () => {
   const [showPlaylistModal, setShowPlaylistModal] = useState(false);
   const [playlists, setPlaylists] = useState([]);
   const [playlistVideoMap, setPlaylistVideoMap] = useState({});
+
+  const [currentPlaybackTime, setCurrentPlaybackTime] = useState(0);
+  const [subtitleBlobUrl, setSubtitleBlobUrl] = useState(null);
+  const [captionsEnabled, setCaptionsEnabled] = useState(true);
+
+  // Generate WebVTT blob url for subtitles when caption_vtt is available
+  useEffect(() => {
+    if (video?.caption_vtt) {
+      const blob = new Blob([video.caption_vtt], { type: "text/vtt" });
+      const url = URL.createObjectURL(blob);
+      setSubtitleBlobUrl(url);
+
+      return () => {
+        URL.revokeObjectURL(url);
+      };
+    } else {
+      setSubtitleBlobUrl(null);
+    }
+  }, [video?.caption_vtt]);
+
+  // Direct video seek handler for Chapters, Transcript & Copilot citations
+  const handleSeek = (timestamp) => {
+    if (playerRef.current) {
+      playerRef.current.currentTime = timestamp;
+      playerRef.current.play().catch(() => {});
+    }
+  };
 
   // Global Co-Watch context
   const coWatch = useCoWatch();
@@ -256,6 +285,7 @@ const handleSubscribe = async () => {
               controls
               autoPlay
               className="w-full h-full"
+              onTimeUpdate={(e) => setCurrentPlaybackTime(e.target.currentTime)}
               onPlay={(e) => {
                 if (suppressSyncRef.current) return;
                 coWatch.sendSync('play', e.target.currentTime);
@@ -268,8 +298,21 @@ const handleSubscribe = async () => {
                 if (suppressSyncRef.current) return;
                 coWatch.sendSync('seek', e.target.currentTime);
               }}
-            />
+            >
+              {subtitleBlobUrl && captionsEnabled && (
+                <track
+                  kind="subtitles"
+                  label="English (Auto-generated)"
+                  src={subtitleBlobUrl}
+                  srcLang="en"
+                  default
+                />
+              )}
+            </video>
           </div>
+
+          {/* AI Content Advisory Notice (Fake Doctor / Unverified Medical & Financial Claims) */}
+          <ContentAdvisoryBanner advisory={video.aiAdvisory} />
 
           <h1 className="text-xl font-bold mb-1">
             {video.title}
@@ -324,6 +367,22 @@ const handleSubscribe = async () => {
               </button>
             )}
 
+            {video.caption_vtt && (
+              <button
+                onClick={() => setCaptionsEnabled((p) => !p)}
+                title={captionsEnabled ? "Disable subtitles" : "Enable subtitles"}
+                className={`flex items-center gap-1.5 px-3.5 py-2 rounded-full text-xs font-semibold
+                transition-all active:scale-[0.97] ${
+                  captionsEnabled
+                    ? "bg-blue-600 text-white shadow-xs"
+                    : "bg-gray-100 text-gray-800 hover:bg-gray-200"
+                }`}
+              >
+                <Subtitles size={16} />
+                CC
+              </button>
+            )}
+
             <button
               disabled={isOwnVideo}
               onClick={!isOwnVideo ? handleSubscribe : undefined}
@@ -362,6 +421,14 @@ const handleSubscribe = async () => {
               </button>
             )}
           </div>
+
+          {/* AI Video Hub: TL;DR Summary, Key Points, Chapters, Interactive Transcript, & Copilot */}
+          <AiVideoHub
+            video={video}
+            currentTime={currentPlaybackTime}
+            onSeek={handleSeek}
+            isOwner={isOwnVideo}
+          />
 
           <h2 className="font-semibold mb-4">
             {comments.length} Comments

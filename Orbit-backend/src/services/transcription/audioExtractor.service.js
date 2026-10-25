@@ -34,7 +34,7 @@ export const extractAudioForWhisper = (inputVideoPath) => {
       .audioCodec("libmp3lame") // Fast and compact MP3 codec
       .audioFrequency(16000) // 16 kHz sampling rate (Whisper internal default)
       .audioChannels(1) // Mono channel (halves audio data size)
-      .audioBitrate("48k") // 48 kbps is optimal for speech clarity while keeping file size tiny
+      .audioBitrate("32k") // 32 kbps mono keeps 1h30m audio under 22MB for Groq 25MB limit
       .output(outputAudioPath)
       .on("start", (commandLine) => {
         console.log(`[FFmpeg] Started extraction: ${commandLine}`);

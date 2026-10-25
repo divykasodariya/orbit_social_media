@@ -603,6 +603,11 @@ const getVideoById = asyncHandler(async (req, res) => {
         caption_vtt: video.caption_vtt,
         transcription_status: video.transcription_status,
         transcription_error: video.transcription_error,
+        segments: video.segments || [],
+
+        // AI Summary, Chapters & Sensitive Claims Advisory
+        aiAnalysis: video.aiAnalysis || {},
+        aiAdvisory: video.aiAdvisory || {},
 
         // AI Moderation & Safety details
         isShadowBanned: video.isShadowBanned || false,

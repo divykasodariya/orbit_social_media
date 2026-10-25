@@ -17,12 +17,12 @@ const getGroqClient = () => {
   return groqClient;
 };
 
-// Candidate models in preference order (Llama 3.3 prioritized, with resilient fallbacks)
+// Candidate models in preference order
 const CANDIDATE_MODELS = [
-  process.env.MODERATION_MODEL || "llama-3.3-70b-versatile",
-  "openai/gpt-oss-120b",
-  "openai/gpt-oss-safeguard-20b",
+  process.env.MODERATION_MODEL || "openai/gpt-oss-120b",
   "qwen/qwen3.8-27b",
+  "openai/gpt-oss-safeguard-20b",
+  "openai/gpt-oss-20b",
 ];
 
 const MODERATION_SYSTEM_PROMPT = `You are an advanced AI Content Safety & Moderation system for a video streaming platform.
@@ -58,10 +58,15 @@ Respond strictly in valid JSON format with this exact structure:
 export const analyzeContentWithLlama = async ({ title = "", description = "", transcript = "" }) => {
   const client = getGroqClient();
 
+  // Cap transcript to 12,000 characters (~3,000 tokens) to stay well under Groq TPM limit
+  const safeTranscript = transcript && transcript.length > 12000
+    ? `${transcript.slice(0, 6000)}\n\n[... middle section omitted ...]\n\n${transcript.slice(-6000)}`
+    : transcript.trim() || "[No spoken transcript available]";
+
   const userContent = [
     `Title: ${title.trim() || "[No title provided]"}`,
     `Description: ${description.trim() || "[No description provided]"}`,
-    `Transcript: ${transcript.trim() || "[No spoken transcript available]"}`
+    `Transcript: ${safeTranscript}`
   ].join("\n\n");
 
   let lastError = null;

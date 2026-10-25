@@ -74,6 +74,7 @@ import recommendationRouter from "./routes/recommendation.routes.js"
 
 import exploreRouter from "./routes/explore.routes.js"
 import notificationRouter from "./routes/notification.routes.js"
+import aiRouter from "./routes/ai.routes.js"
 
 // API Routes
 app.use("/api/v1/users", userRouter)
@@ -93,6 +94,7 @@ app.use("/api/v1/comments", commentRouter)
 app.use("/api/v1/likes", likeRouter)
 app.use("/api/v1/playlists", playlistRouter)
 app.use("/api/v1/dashboard", dashboardRouter)
+app.use("/api/v1/ai", aiRouter)
 
 // 404 handler (AFTER all routes, BEFORE error handler)
 app.use((req, res) => {
