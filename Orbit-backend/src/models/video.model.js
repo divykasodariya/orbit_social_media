@@ -107,6 +107,56 @@ const videoSchema = new Schema(
       type: Date,
       default: null,
     },
+
+    // 🧠 Timestamped transcript segments (for RAG chatbot & interactive transcript)
+    segments: {
+      type: [
+        {
+          start: { type: Number, required: true },
+          end: { type: Number, required: true },
+          text: { type: String, required: true },
+        },
+      ],
+      default: [],
+    },
+
+    // 🤖 AI Summary, Key Points & Chapters (Groq Llama 3.3)
+    aiAnalysis: {
+      tldr: { type: String, default: null },
+      keyPoints: { type: [String], default: [] },
+      chapters: {
+        type: [
+          {
+            timestamp: { type: Number, required: true },
+            formattedTime: { type: String, required: true },
+            title: { type: String, required: true },
+          },
+        ],
+        default: [],
+      },
+      analysisStatus: {
+        type: String,
+        enum: ["pending", "processing", "completed", "failed"],
+        default: "pending",
+      },
+    },
+
+    // ⚠️ AI Advisory: Unverified Medical / Financial / Legal Claims
+    aiAdvisory: {
+      hasAdvisory: { type: Boolean, default: false },
+      category: {
+        type: String,
+        enum: ["medical", "financial", "legal", "none"],
+        default: "none",
+      },
+      riskLevel: {
+        type: String,
+        enum: ["high", "medium", "low", "none"],
+        default: "none",
+      },
+      disclaimerTitle: { type: String, default: null },
+      disclaimerMessage: { type: String, default: null },
+    },
   },
   { timestamps: true }
 );
