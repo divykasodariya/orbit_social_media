@@ -52,6 +52,26 @@ const videoSchema = new Schema(
       ref: "User",
       required: true,
     },
+
+    // 🎙️ AI Transcription & Subtitles (Groq Whisper)
+    transcript: {
+      type: String,
+      default: null,
+    },
+    caption_vtt: {
+      type: String,
+      default: null,
+    },
+    transcription_status: {
+      type: String,
+      enum: ["pending", "processing", "completed", "failed"],
+      default: "pending",
+      index: true,
+    },
+    transcription_error: {
+      type: String,
+      default: null,
+    },
   },
   { timestamps: true }
 );
