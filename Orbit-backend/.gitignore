@@ -119,3 +119,8 @@ dist
 .pnp.*
 
 # End of https://mrkandreev.name/snippets/gitignore-generator/#Node
+
+# OS & temporary files
+.DS_Store
+public/temp/*
+!public/temp/.gitkeep

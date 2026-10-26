@@ -39,6 +39,10 @@ export const addFriend = async (userId1, userId2) => {
         ON CREATE SET r1.createdAt = datetime()
         MERGE (u2)-[r2:FRIEND]->(u1)
         ON CREATE SET r2.createdAt = datetime()
+        MERGE (u1)-[rw1:FRIEND_WITH]->(u2)
+        ON CREATE SET rw1.createdAt = datetime()
+        MERGE (u2)-[rw2:FRIEND_WITH]->(u1)
+        ON CREATE SET rw2.createdAt = datetime()
         RETURN r1, r2
     `;
     const result = await writeQuery(cypher, { 
@@ -50,7 +54,7 @@ export const addFriend = async (userId1, userId2) => {
 
 export const removeFriend = async (userId1, userId2) => {
     const cypher = `
-        MATCH (u1:User {mongoId: $userId1})-[r:FRIEND]-(u2:User {mongoId: $userId2})
+        MATCH (u1:User {mongoId: $userId1})-[r:FRIEND|FRIEND_WITH]-(u2:User {mongoId: $userId2})
         DELETE r
     `;
     await writeQuery(cypher, { 

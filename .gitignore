@@ -35,3 +35,6 @@ yarn-error.log*
 # Temporary Upload Files
 Orbit-backend/public/temp/*
 !Orbit-backend/public/temp/.gitkeep
+
+# # Local reference modules
+# core-modules/

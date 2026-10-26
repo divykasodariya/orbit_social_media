@@ -207,7 +207,7 @@ const getFriends = asyncHandler(async (req, res) => {
         // Fetching from Neo4j as it's the graph source of truth.
         const cypher = `
             MATCH (u:User {mongoId: $userId})-[:FRIEND]-(friend:User)
-            RETURN friend.mongoId AS friendId
+            RETURN DISTINCT friend.mongoId AS friendId
         `;
         const result = await readQuery(cypher, { userId: currentUserId.toString() });
         friendIds = result ? result.map(record => record.get('friendId')) : [];
@@ -246,7 +246,7 @@ const getUserFriends = asyncHandler(async (req, res) => {
     try {
         const cypher = `
             MATCH (u:User {mongoId: $userId})-[:FRIEND]-(friend:User)
-            RETURN friend.mongoId AS friendId
+            RETURN DISTINCT friend.mongoId AS friendId
         `;
         const result = await readQuery(cypher, { userId: id.toString() });
         
@@ -283,7 +283,8 @@ const getMutualFriends = asyncHandler(async (req, res) => {
     try {
         const cypher = `
             MATCH (u1:User {mongoId: $user1})-[:FRIEND]-(mutual:User)-[:FRIEND]-(u2:User {mongoId: $user2})
-            RETURN mutual.mongoId AS mutualId
+            WHERE mutual.mongoId <> $user1 AND mutual.mongoId <> $user2
+            RETURN DISTINCT mutual.mongoId AS mutualId
         `;
         const result = await readQuery(cypher, { 
             user1: currentUserId.toString(), 

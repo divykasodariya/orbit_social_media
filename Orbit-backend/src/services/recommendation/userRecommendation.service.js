@@ -16,18 +16,16 @@ export const recommendUsers = async (userId, limit = 10) => {
             MATCH (u:User {mongoId: $userId})
             
             // Find candidates who are 2 hops away via FRIEND or MEMBER_OF
-            // The *1..2 ensures we get direct neighbors of our neighbors
-            MATCH (u)-[:FRIEND|MEMBER_OF*2]-(candidate:User)
+            MATCH (u)-[:FRIEND|FRIEND_WITH|MEMBER_OF*2]-(candidate:User)
             
             WHERE u <> candidate
-              AND NOT (u)-[:FRIEND]-(candidate)
-              AND NOT (u)-[:FOLLOWS]->(candidate)
+              AND NOT (u)-[:FRIEND|FRIEND_WITH]-(candidate)
               AND NOT (u)-[:BLOCKS]-(candidate)
               
             WITH DISTINCT u, candidate
             
             // Count mutual friends
-            OPTIONAL MATCH (u)-[:FRIEND]-(mf:User)-[:FRIEND]-(candidate)
+            OPTIONAL MATCH (u)-[:FRIEND|FRIEND_WITH]-(mf:User)-[:FRIEND|FRIEND_WITH]-(candidate)
             WITH u, candidate, count(DISTINCT mf) AS mutualFriendsCount
             
             // Count mutual communities
@@ -51,10 +49,13 @@ export const recommendUsers = async (userId, limit = 10) => {
             limit: parseInt(limit) 
         });
 
+        let recommendations = [];
         if (result && result.length > 0) {
-            return result.map(record => {
-                const mutualFriends = record.get('mutualFriendsCount').toNumber();
-                const mutualComms = record.get('mutualCommsCount').toNumber();
+            recommendations = result.map(record => {
+                const rawMf = record.get('mutualFriendsCount');
+                const rawMc = record.get('mutualCommsCount');
+                const mutualFriends = rawMf?.toNumber ? rawMf.toNumber() : Number(rawMf || 0);
+                const mutualComms = rawMc?.toNumber ? rawMc.toNumber() : Number(rawMc || 0);
                 
                 let reasons = [];
                 if (mutualFriends > 0) reasons.push(`${mutualFriends} mutual friend${mutualFriends > 1 ? 's' : ''}`);
@@ -68,26 +69,37 @@ export const recommendUsers = async (userId, limit = 10) => {
             });
         }
 
-        // 4. Fallback: no FOF candidates — suggest random users the current user isn't friends with
-        const randomCypher = `
-            MATCH (candidate:User)
-            WHERE candidate.mongoId <> $userId
-            AND NOT ((:User {mongoId: $userId})-[:FRIEND]-(candidate))
-            AND NOT ((:User {mongoId: $userId})-[:BLOCKS]->(candidate))
-            RETURN candidate.mongoId AS candidateId
-            LIMIT ${limit * 2}
-        `;
-        const randomResult = await readQuery(randomCypher, { userId: userId.toString() });
+        // Fill remaining slots up to limit with other active users from Orbit
+        if (recommendations.length < parseInt(limit)) {
+            const alreadyRecommended = recommendations.map(r => r.userId);
+            const remaining = parseInt(limit) - recommendations.length;
+            const fillCypher = `
+                MATCH (candidate:User)
+                WHERE candidate.mongoId <> $userId
+                  AND NOT candidate.mongoId IN $already
+                  AND NOT ((:User {mongoId: $userId})-[:FRIEND|FRIEND_WITH]-(candidate))
+                  AND NOT ((:User {mongoId: $userId})-[:BLOCKS]->(candidate))
+                RETURN candidate.mongoId AS candidateId
+                LIMIT toInteger($remaining)
+            `;
+            const fillResult = await readQuery(fillCypher, {
+                userId: userId.toString(),
+                already: alreadyRecommended,
+                remaining
+            });
 
-        if (randomResult && randomResult.length > 0) {
-            return randomResult.map(r => ({
-                userId: r.get('candidateId'),
-                score: 0,
-                reason: 'People on Orbit'
-            })).slice(0, limit);
+            if (fillResult && fillResult.length > 0) {
+                fillResult.forEach(r => {
+                    recommendations.push({
+                        userId: r.get('candidateId'),
+                        score: 0,
+                        reason: 'People on Orbit'
+                    });
+                });
+            }
         }
 
-        return [];
+        return recommendations;
 
     } catch (error) {
         console.error("Neo4j Recommendation failed, falling back to MongoDB:", error.message);

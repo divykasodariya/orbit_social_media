@@ -8,7 +8,8 @@
     "dev": "nodemon -r dotenv/config --experimental-json-modules src/index.js",
     "start": "node src/index.js",
     "reanalyze": "node --env-file=.env scripts/bulkReanalyzeAll.js",
-    "reanalyze:force": "FORCE=1 node --env-file=.env scripts/bulkReanalyzeAll.js"
+    "reanalyze:force": "FORCE=1 node --env-file=.env scripts/bulkReanalyzeAll.js",
+    "sync:neo4j": "node -r dotenv/config scripts/syncNeo4j.js"
   },
   "keywords": [
     "javascript",
