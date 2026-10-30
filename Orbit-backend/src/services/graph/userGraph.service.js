@@ -6,7 +6,8 @@ import { writeQuery, readQuery } from './neo4j.service.js';
  * @param {string} username - The username.
  */
 export const createUserNode = async (mongoId, username) => {
-    const cypher = `
+    try{
+        const cypher = `
         MERGE (u:User {mongoId: $mongoId})
         ON CREATE SET u.username = $username, u.createdAt = datetime()
         ON MATCH SET u.username = $username
@@ -14,6 +15,10 @@ export const createUserNode = async (mongoId, username) => {
     `;
     const result = await writeQuery(cypher, { mongoId: mongoId.toString(), username });
     return result ? result[0].get('u').properties : null;
+    }catch(error){
+        console.error("❌ Error creating user node:", error);
+        throw error;
+    }
 };
 
 /**
