@@ -127,4 +127,4 @@ app.use((err, req, res, next) => {
 });
 
 // Export app
-export { app }
+export default { app }
