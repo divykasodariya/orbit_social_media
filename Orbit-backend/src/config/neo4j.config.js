@@ -16,7 +16,7 @@ export const initNeo4j = () => {
                 maxConnectionPoolSize: 50,
                 connectionAcquisitionTimeout: 2 * 60 * 1000, // 2 minutes
                 disableLosslessIntegers: true, // Use standard JS numbers instead of Neo4j Integer objects
-                encrypted: 'ENCRYPTION_OFF', // Fix for Neo4j 4.0+ local unencrypted connections
+                // encrypted: 'ENCRYPTION_OFF', // Fix for Neo4j 4.0+ local unencrypted connections
             }
         );
         console.log('✅ Neo4j Driver Initialized');
