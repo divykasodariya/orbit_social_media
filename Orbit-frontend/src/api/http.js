@@ -68,6 +68,12 @@ http.interceptors.response.use(
     // ✅ Only attempt refresh on 401
     if (error.response?.status === 401) {
       
+      // ✅ If no refreshToken available at all, don't even try - just reject
+      const storedRefreshToken = localStorage.getItem("refreshToken");
+      if (!storedRefreshToken) {
+        return Promise.reject(error);
+      }
+
       // ✅ If refresh is already in progress, queue this request
       if (isRefreshing) {
         return new Promise((resolve, reject) => {
@@ -81,10 +87,10 @@ http.interceptors.response.use(
       isRefreshing = true;
 
       try {
-        // ✅ Attempt token refresh
+        // ✅ Send refreshToken in body as fallback for browsers that block cookies (Safari, Chrome mobile)
         const { data } = await axios.post(
           `${import.meta.env.VITE_API_BASE_URL}/users/refresh-token`,
-          {},
+          { refreshToken: storedRefreshToken },
           { withCredentials: true }
         );
 
@@ -99,19 +105,20 @@ http.interceptors.response.use(
         processQueue(null, data.data?.accessToken);
         isRefreshing = false;
 
-        // ✅ Retry original request
+        // ✅ Retry original request with new token
+        originalRequest.headers.Authorization = `Bearer ${data.data?.accessToken}`;
         return http(originalRequest);
       } catch (refreshError) {
         processQueue(refreshError, null);
         isRefreshing = false;
         
-        // ✅ Refresh failed - clear auth state
-        console.log("🔴 Token refresh failed - clearing auth");
-        localStorage.removeItem("accessToken");
-        localStorage.removeItem("refreshToken");
-        
-        // ❌ DON'T redirect here - let the component handle it
-        // This prevents infinite loops
+        // ✅ Only clear tokens if refresh actually failed (token truly expired/invalid)
+        // Do NOT clear if it was a network error
+        if (refreshError.response?.status === 401) {
+          console.log("🔴 Refresh token invalid/expired - clearing auth");
+          localStorage.removeItem("accessToken");
+          localStorage.removeItem("refreshToken");
+        }
         
         return Promise.reject(refreshError);
       }
