@@ -12,6 +12,12 @@ const allowedOrigins = [
   // "https://your-frontend-app.vercel.app",
 ];
 
+// Body parser middleware
+app.use(express.json({ limit: "16kb" }))
+app.use(express.urlencoded({ extended: true, limit: "16kb" }))
+app.use(express.static("public"))
+app.use(cookieParser())
+
 app.use(
   cors({
     origin: (origin, callback) => {
@@ -32,11 +38,7 @@ app.use(
   })
 );
 
-// Body parser middleware
-app.use(express.json({ limit: "16kb" }))
-app.use(express.urlencoded({ extended: true, limit: "16kb" }))
-app.use(express.static("public"))
-app.use(cookieParser())
+
 
 // Health check routes (BEFORE API routes)
 app.get('/', (req, res) => {
@@ -71,6 +73,7 @@ import threadRouter from "./routes/thread.routes.js"
 import feedRouter from "./routes/feed.routes.js"
 import graphRouter from "./routes/graph.routes.js"
 import recommendationRouter from "./routes/recommendation.routes.js"
+import messageRouter from "./routes/message.routes.js";
 
 import exploreRouter from "./routes/explore.routes.js"
 import notificationRouter from "./routes/notification.routes.js"
@@ -95,6 +98,7 @@ app.use("/api/v1/likes", likeRouter)
 app.use("/api/v1/playlists", playlistRouter)
 app.use("/api/v1/dashboard", dashboardRouter)
 app.use("/api/v1/ai", aiRouter)
+app.use("/api/v1/messages", messageRouter)
 
 // 404 handler (AFTER all routes, BEFORE error handler)
 app.use((req, res) => {
@@ -126,5 +130,7 @@ app.use((err, req, res, next) => {
     });
 });
 
+
+
 // Export app
-export { app }
+export default app

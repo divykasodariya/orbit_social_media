@@ -9,9 +9,11 @@ import {
     removeFriend
 } from '../api/friend.api';
 import { searchUsers } from '../api/user.api';
-import { Users, UserPlus, UserCheck, UserX, Loader2, Search, X } from 'lucide-react';
+import { Users, UserPlus, UserCheck, UserX, Loader2, Search, X, MessageCircle, Send, ArrowLeft } from 'lucide-react';
+import { getMessages, sendMessage } from '../api/message.api';
 import { useAuth } from '../context/AuthContext';
 import { useSearchParams } from 'react-router-dom';
+import { createPortal } from 'react-dom';
 
 const FriendsPage = () => {
     const { user } = useAuth();
@@ -25,6 +27,18 @@ const FriendsPage = () => {
     
     const [loading, setLoading] = useState(true);
     const [actionLoading, setActionLoading] = useState(null); // id of user/request being acted on
+
+    // One-to-one chat state
+    const [selectedFriend, setSelectedFriend] = useState(null);
+    const [messages, setMessages] = useState([]);
+    const [messageText, setMessageText] = useState('');
+    const [chatLoading, setChatLoading] = useState(false);
+    const [messageSending, setMessageSending] = useState(false);
+    const [chatError, setChatError] = useState('');
+    const messagesEndRef = useRef(null);
+    const seenMessageKeysRef = useRef(new Set());   // messages we've already seen (for notifications)
+    const initialLoadDoneRef = useRef(false);        // don't notify for the history load
+    const activeFriendIdRef = useRef(null);          // ignore late responses from a previous chat
 
     // Search by username state
     const [searchQuery, setSearchQuery] = useState(searchParams.get('q') || '');
@@ -83,6 +97,134 @@ const FriendsPage = () => {
 
         return () => clearTimeout(searchTimeoutRef.current);
     }, [searchQuery]);
+
+    // Normalize the API response so the UI can handle either { data: [...] } or [...].
+    const extractMessageList = (response) => {
+        if (Array.isArray(response)) return response;
+        if (Array.isArray(response?.data)) return response.data;
+        if (Array.isArray(response?.messages)) return response.messages;
+        return [];
+    };
+
+    const loadMessages = async (friendId, showLoader = false) => {
+        if (showLoader) setChatLoading(true);
+        try {
+            const response = await getMessages(friendId);
+            if (activeFriendIdRef.current !== friendId) return; // user switched chats meanwhile
+            const list = extractMessageList(response);
+
+            // Detect newly received messages (from the other person) and notify
+            const myId = String(user?._id || user?.id);
+            const keyOf = (m, i) => m._id || `${m.createdAt || i}-${m.content || m.text}`;
+            const incomingNew = list.filter((m, i) => {
+                const senderId = String(m.sender?._id || m.sender || m.senderId);
+                return senderId !== myId && !seenMessageKeysRef.current.has(keyOf(m, i));
+            });
+            if (initialLoadDoneRef.current && incomingNew.length > 0) {
+                notifyNewMessage(incomingNew[incomingNew.length - 1]);
+            }
+            list.forEach((m, i) => seenMessageKeysRef.current.add(keyOf(m, i)));
+            initialLoadDoneRef.current = true;
+
+            setMessages(list);
+            setChatError('');
+        } catch (error) {
+            console.error('Failed to load conversation:', error);
+            if (showLoader) setChatError(error.response?.data?.message || 'Unable to load messages. Please try again.');
+        } finally {
+            if (showLoader) setChatLoading(false);
+        }
+    };
+
+    // Sound + browser notification when a new message arrives
+    const notifyNewMessage = (message) => {
+        try {
+            const AudioCtx = window.AudioContext || window.webkitAudioContext;
+            if (AudioCtx) {
+                const ctx = new AudioCtx();
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(880, ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(1320, ctx.currentTime + 0.12);
+                gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.15, ctx.currentTime + 0.02);
+                gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.25);
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.start();
+                osc.stop(ctx.currentTime + 0.26);
+                osc.onended = () => ctx.close();
+            }
+        } catch (e) { /* sound is optional */ }
+
+        if ('Notification' in window && Notification.permission === 'granted' && document.hidden) {
+            const n = new Notification(selectedFriend?.fullName || 'New message', {
+                body: message.content || message.text || 'Sent you a message',
+                icon: selectedFriend?.avatar || undefined,
+                tag: 'orbit-chat'
+            });
+            n.onclick = () => { window.focus(); n.close(); };
+        }
+    };
+
+    const handleOpenChat = (friend) => {
+        activeFriendIdRef.current = friend._id;
+        seenMessageKeysRef.current = new Set();
+        initialLoadDoneRef.current = false;
+        if ('Notification' in window && Notification.permission === 'default') {
+            Notification.requestPermission();
+        }
+        setSelectedFriend(friend);
+        setMessages([]);
+        setMessageText('');
+        setChatError('');
+        loadMessages(friend._id, true);
+    };
+
+    const handleSendMessage = async (event) => {
+        event.preventDefault();
+        const content = messageText.trim();
+        if (!content || !selectedFriend || messageSending) return;
+
+        setMessageSending(true);
+        setChatError('');
+        try {
+            await sendMessage(selectedFriend._id, content);
+            setMessageText('');
+            await loadMessages(selectedFriend._id);
+        } catch (error) {
+            console.error('Failed to send message:', error);
+            setChatError(error.response?.data?.message || 'Message could not be sent. Please try again.');
+        } finally {
+            setMessageSending(false);
+        }
+    };
+
+    // Poll while a conversation is open to receive new messages.
+    useEffect(() => {
+        if (!selectedFriend?._id) return;
+
+        const friendId = selectedFriend._id;
+        const intervalId = setInterval(() => loadMessages(friendId), 3000);
+        return () => clearInterval(intervalId);
+    }, [selectedFriend?._id]);
+
+    // Lock page scroll while the messenger is open
+    useEffect(() => {
+        if (!selectedFriend) {
+            activeFriendIdRef.current = null;
+            return;
+        }
+        const prev = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+        return () => { document.body.style.overflow = prev; };
+    }, [selectedFriend]);
+
+    // Keep the latest message visible when a conversation updates.
+    useEffect(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, [messages]);
 
     // Actions
     const handleSendRequest = async (userId) => {
@@ -311,6 +453,164 @@ const FriendsPage = () => {
                 </button>
             </div>
 
+            {/* One-to-one chat panel (Instagram/Messenger style full-screen messenger) */}
+            {selectedFriend && createPortal(
+                <div className="fixed inset-0 z-[100] bg-black/50 md:p-6 flex items-center justify-center animate-[fadeIn_0.2s_ease-out]">
+                    <section className="w-full h-[100dvh] md:max-w-5xl md:h-[85vh] bg-white md:rounded-2xl shadow-2xl overflow-hidden flex">
+
+                        {/* Left: conversations list (desktop only) */}
+                        <aside className="hidden md:flex flex-col w-80 border-r border-gray-200 bg-white">
+                            <div className="px-5 py-4 border-b flex items-center justify-between">
+                                <h2 className="text-lg font-extrabold text-gray-900">Messages</h2>
+                                <button
+                                    onClick={() => { setSelectedFriend(null); setMessages([]); setChatError(''); }}
+                                    className="p-2 rounded-full text-gray-500 hover:bg-gray-100 transition"
+                                    aria-label="Close chat"
+                                >
+                                    <X size={18} />
+                                </button>
+                            </div>
+                            <div className="flex-1 overflow-y-auto">
+                                {friends.map(friend => {
+                                    const isActive = friend._id === selectedFriend._id;
+                                    return (
+                                        <button
+                                            key={friend._id}
+                                            onClick={() => !isActive && handleOpenChat(friend)}
+                                            className={`w-full flex items-center gap-3 px-5 py-3 text-left transition ${isActive ? 'bg-blue-50' : 'hover:bg-gray-50'}`}
+                                        >
+                                            <img
+                                                src={friend.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(friend.fullName || friend.username || 'User')}&background=e5e7eb&color=374151`}
+                                                alt=""
+                                                className="w-12 h-12 rounded-full object-cover border"
+                                            />
+                                            <div className="min-w-0">
+                                                <p className="font-semibold text-sm text-gray-900 truncate">{friend.fullName || 'Orbit User'}</p>
+                                                <p className="text-xs text-gray-500 truncate">@{friend.username || 'user'}</p>
+                                            </div>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </aside>
+
+                        {/* Right: active conversation */}
+                        <div className="flex-1 min-w-0 flex flex-col bg-white">
+                            {/* Chat header */}
+                            <div className="flex items-center gap-3 px-3 md:px-5 py-3 border-b bg-white">
+                                <button
+                                    onClick={() => { setSelectedFriend(null); setMessages([]); setChatError(''); }}
+                                    className="md:hidden p-2 rounded-full text-gray-700 hover:bg-gray-100 transition"
+                                    aria-label="Back"
+                                >
+                                    <ArrowLeft size={20} />
+                                </button>
+                                <img
+                                    src={selectedFriend.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(selectedFriend.fullName || selectedFriend.username || 'User')}&background=e5e7eb&color=374151`}
+                                    alt=""
+                                    className="w-10 h-10 rounded-full object-cover border"
+                                />
+                                <div className="min-w-0 flex-1">
+                                    <h2 className="font-bold text-gray-900 truncate leading-tight">{selectedFriend.fullName || 'Orbit User'}</h2>
+                                    <p className="text-xs text-gray-500 truncate">@{selectedFriend.username || 'user'}</p>
+                                </div>
+                            </div>
+
+                            {/* Messages */}
+                            <div className="flex-1 overflow-y-auto px-3 md:px-6 py-4 bg-white space-y-1">
+                                {chatLoading ? (
+                                    <div className="h-full flex items-center justify-center text-blue-600">
+                                        <Loader2 size={26} className="animate-spin" />
+                                    </div>
+                                ) : messages.length === 0 ? (
+                                    <div className="h-full flex flex-col items-center justify-center text-center text-gray-500">
+                                        <img
+                                            src={selectedFriend.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(selectedFriend.fullName || selectedFriend.username || 'User')}&background=e5e7eb&color=374151`}
+                                            alt=""
+                                            className="w-20 h-20 rounded-full object-cover border mb-3"
+                                        />
+                                        <p className="font-bold text-gray-900">{selectedFriend.fullName || 'Orbit User'}</p>
+                                        <p className="text-sm">@{selectedFriend.username || 'user'}</p>
+                                        <p className="text-sm mt-3">No messages yet. Say hi 👋</p>
+                                    </div>
+                                ) : (
+                                    messages.map((message, index) => {
+                                        const getSenderId = (m) => String(m?.sender?._id || m?.sender || m?.senderId);
+                                        const myId = String(user?._id || user?.id);
+                                        const isOwnMessage = getSenderId(message) === myId;
+                                        const nextMessage = messages[index + 1];
+                                        const prevMessage = messages[index - 1];
+                                        const isLastInGroup = !nextMessage || getSenderId(nextMessage) !== getSenderId(message);
+                                        const isFirstInGroup = !prevMessage || getSenderId(prevMessage) !== getSenderId(message);
+                                        // Timestamp only on the very last message from each person (max 2 in the whole chat)
+                                        const isLastFromThisSender = !messages.slice(index + 1).some(m => getSenderId(m) === getSenderId(message));
+                                        return (
+                                            <div
+                                                key={message._id || `${message.createdAt || ''}-${index}`}
+                                                className={`flex items-end gap-2 ${isOwnMessage ? 'justify-end' : 'justify-start'} ${isFirstInGroup && index !== 0 ? 'pt-2' : ''}`}
+                                            >
+                                                {/* Friend avatar beside the last bubble of a group */}
+                                                {!isOwnMessage && (
+                                                    <div className="w-7 h-7 shrink-0">
+                                                        {isLastInGroup && (
+                                                            <img
+                                                                src={selectedFriend.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(selectedFriend.fullName || selectedFriend.username || 'User')}&background=e5e7eb&color=374151`}
+                                                                alt=""
+                                                                className="w-7 h-7 rounded-full object-cover"
+                                                            />
+                                                        )}
+                                                    </div>
+                                                )}
+                                                <div className={`flex flex-col max-w-[75%] md:max-w-[60%] ${isOwnMessage ? 'items-end' : 'items-start'}`}>
+                                                    {/* Timestamp: only on the last message from me and the last message from them, above the bubble */}
+                                                    {isLastFromThisSender && message.createdAt && (
+                                                        <span className="text-[10px] text-gray-400 mb-1 px-2">
+                                                            {new Date(message.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                        </span>
+                                                    )}
+                                                    <div
+                                                        title={message.createdAt ? new Date(message.createdAt).toLocaleString() : undefined}
+                                                        className={`rounded-3xl px-4 py-2 ${isOwnMessage ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-900'}`}
+                                                    >
+                                                        <p className="text-sm whitespace-pre-wrap break-words">{message.content || message.text}</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })
+                                )}
+                                <div ref={messagesEndRef} />
+                            </div>
+
+                            {chatError && <p className="px-5 pt-2 text-sm text-red-600">{chatError}</p>}
+
+                            {/* Composer */}
+                            <form onSubmit={handleSendMessage} className="p-3 md:p-4 bg-white">
+                                <div className="flex items-center gap-2 border border-gray-200 rounded-full pl-4 pr-1.5 py-1.5 bg-white focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent">
+                                    <input
+                                        type="text"
+                                        value={messageText}
+                                        onChange={(event) => setMessageText(event.target.value)}
+                                        placeholder={`Message ${selectedFriend.fullName || 'your friend'}...`}
+                                        maxLength={2000}
+                                        className="flex-1 min-w-0 py-2 text-sm bg-transparent focus:outline-none"
+                                    />
+                                    <button
+                                        type="submit"
+                                        disabled={!messageText.trim() || messageSending}
+                                        className="p-2.5 rounded-full bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition"
+                                        aria-label="Send message"
+                                    >
+                                        {messageSending ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </section>
+                </div>,
+                document.body
+            )}
+
             {/* Content Area */}
             <div className="grid gap-4">
                 
@@ -322,14 +622,24 @@ const FriendsPage = () => {
                                 key={friend._id} 
                                 userData={friend} 
                                 actionButton={
-                                    <button 
-                                        onClick={() => handleRemoveFriend(friend._id)}
-                                        disabled={actionLoading === friend._id}
-                                        className="text-gray-400 hover:text-red-500 p-2 rounded-full hover:bg-red-50 transition"
-                                        title="Remove Friend"
-                                    >
-                                        {actionLoading === friend._id ? <Loader2 size={20} className="animate-spin" /> : <UserX size={20} />}
-                                    </button>
+                                    <>
+                                        <button
+                                            onClick={() => handleOpenChat(friend)}
+                                            className="px-3 py-2 text-sm font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-full transition flex items-center gap-2"
+                                            title={`Chat with ${friend.fullName || friend.username || 'friend'}`}
+                                        >
+                                            <MessageCircle size={17} />
+                                            Chat
+                                        </button>
+                                        <button
+                                            onClick={() => handleRemoveFriend(friend._id)}
+                                            disabled={actionLoading === friend._id}
+                                            className="text-gray-400 hover:text-red-500 p-2 rounded-full hover:bg-red-50 transition"
+                                            title="Remove Friend"
+                                        >
+                                            {actionLoading === friend._id ? <Loader2 size={20} className="animate-spin" /> : <UserX size={20} />}
+                                        </button>
+                                    </>
                                 }
                             />
                         ))

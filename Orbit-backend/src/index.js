@@ -6,7 +6,7 @@ import dotenv from "dotenv";
 import http from "http";
 import { Server as SocketIOServer } from "socket.io";
 import connectDB from "./db/index.js";
-import { app } from "./app.js";
+import  app  from "./app.js";
 import { initNeo4j } from "./config/neo4j.config.js";
 import { setupConstraints } from "./services/graph/neo4j.service.js";
 import { initCoWatchSocket } from "./socket/cowatch.socket.js";
