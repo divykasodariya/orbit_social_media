@@ -23,10 +23,10 @@ app.use(
     origin: (origin, callback) => {
       // Allow requests with no origin (mobile apps, Postman, server-to-server)
       if (!origin) return callback(null, true);
-      
-      if (allowedOrigins.includes(origin) || 
-          origin.startsWith("http://localhost") ||
-          origin.endsWith(".vercel.app")) {
+
+      if (allowedOrigins.includes(origin) ||
+        origin.startsWith("http://localhost") ||
+        origin.endsWith(".vercel.app")) {
         callback(null, true);
       } else {
         callback(new Error("Not allowed by CORS"));
@@ -42,20 +42,20 @@ app.use(
 
 // Health check routes (BEFORE API routes)
 app.get('/', (req, res) => {
-    res.status(200).json({
-        success: true,
-        message: 'YouTube + Twitter API is running',
-        version: '1.0.0',
-        timestamp: new Date().toISOString()
-    });
+  res.status(200).json({
+    success: true,
+    message: 'YouTube + Twitter API is running',
+    version: '1.0.0',
+    timestamp: new Date().toISOString()
+  });
 });
 
 app.get('/health', (req, res) => {
-    res.status(200).json({
-        success: true,
-        message: 'Server is healthy',
-        timestamp: new Date().toISOString()
-    });
+  res.status(200).json({
+    success: true,
+    message: 'Server is healthy',
+    timestamp: new Date().toISOString()
+  });
 });
 
 // Routes import
@@ -102,35 +102,35 @@ app.use("/api/v1/messages", messageRouter)
 
 // 404 handler (AFTER all routes, BEFORE error handler)
 app.use((req, res) => {
-    res.status(404).json({ 
-        success: false, 
-        message: "Route not found",
-        path: req.originalUrl
-    });
+  res.status(404).json({
+    success: false,
+    message: "Route not found",
+    path: req.originalUrl
+  });
 });
 
 // Global error handler (VERY LAST)
 app.use((err, req, res, next) => {
-    const statusCode = err.statusCode || 500;
-    const message = err.message || "Internal Server Error";
-    
-    // Log error for debugging
-    console.error('Error:', {
-        statusCode,
-        message,
-        path: req.path,
-        method: req.method,
-        ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
-    });
+  const statusCode = err.statusCode || 500;
+  const message = err.message || "Internal Server Error";
 
-    res.status(statusCode).json({
-        success: false,
-        message,
-        ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
-    });
+  // Log error for debugging
+  console.error('Error:', {
+    statusCode,
+    message,
+    path: req.path,
+    method: req.method,
+    ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
+  });
+
+  res.status(statusCode).json({
+    success: false,
+    message,
+    ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
+  });
 });
 
 
 
 // Export app
-export default app
+export {app}
