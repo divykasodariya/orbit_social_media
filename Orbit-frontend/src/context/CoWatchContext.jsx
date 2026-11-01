@@ -3,7 +3,13 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { io } from "socket.io-client";
 import { useAuth } from "./AuthContext";
 
-const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || "http://localhost:8000";
+// Derive socket URL from VITE_SOCKET_URL, or fall back to the base of VITE_API_BASE_URL
+// e.g. "https://orbit-social-media.ethiodeploy.app/api/v1" → "https://orbit-social-media.ethiodeploy.app"
+const SOCKET_URL =
+  import.meta.env.VITE_SOCKET_URL ||
+  (import.meta.env.VITE_API_BASE_URL
+    ? new URL(import.meta.env.VITE_API_BASE_URL).origin
+    : "http://localhost:8000");
 
 const CoWatchContext = createContext(null);
 
