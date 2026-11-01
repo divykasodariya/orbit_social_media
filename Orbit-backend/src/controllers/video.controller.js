@@ -8,7 +8,7 @@ import { uploadOnCloudinary, /*deleteOnCloudinary*/ } from "../utils/cloudinary.
 import { getRecommendedVideos } from "../services/recommendation/videoRecommendation.service.js";
 import { processVideoTranscription, safeUnlink } from "../services/transcription/index.js";
 import { moderateVideoById } from "../services/moderation/index.js";
-
+import { createVideoNode, viewVideo } from "../services/graph/video.service.js";
 
 // const getAllVideos = asyncHandler(async (req, res) => {
 //     const {page=1, limit=10, query="", sortBy="createdAt", sortType="desc"} = req.query
@@ -350,28 +350,30 @@ const getAllUserVideos = asyncHandler(async (req, res) => {
 //     )
 // })
 
+
 const publishVideo = asyncHandler(async (req, res) => {
     const { title, description } = req.body;
 
-    // 1️⃣ Validate inputs
+    // 1. Validate inputs
     if (!title || !description) {
         throw new ApiError(400, "Title and description are required");
     }
 
-    // 2️⃣ Get video file
+    // 2. Get video file
     const videoLocalPath = req.files?.videoFile?.[0]?.path;
+
     if (!videoLocalPath) {
         throw new ApiError(400, "Video file is required");
     }
 
-    // 3️⃣ Get thumbnail file
+    // 3. Get thumbnail file
     const thumbnailLocalPath = req.files?.thumbnail?.[0]?.path;
+
     if (!thumbnailLocalPath) {
         throw new ApiError(400, "Thumbnail is required");
     }
 
-    // 4️⃣ Upload to Cloudinary
-    // Note: deleteAfterUpload is false for videoFile so background worker can extract audio locally
+    // 4. Upload to Cloudinary
     const videoFile = await uploadOnCloudinary(videoLocalPath, false);
     const thumbnail = await uploadOnCloudinary(thumbnailLocalPath, true);
 
@@ -380,7 +382,7 @@ const publishVideo = asyncHandler(async (req, res) => {
         throw new ApiError(400, "Error uploading files to Cloudinary");
     }
 
-    // 5️⃣ Save video in DB with pending transcription status
+    // 5. Save video in MongoDB
     const video = await Video.create({
         videoFile: videoFile.url,
         thumbnail: thumbnail.url,
@@ -391,19 +393,39 @@ const publishVideo = asyncHandler(async (req, res) => {
         transcription_status: "pending"
     });
 
-    // 6️⃣ Dispatch background audio extraction and transcription (non-blocking)
+    // 6. Create Video node and UPLOADED relationship in Neo4j
+    try {
+        await createVideoNode(
+            video._id,
+            req.user._id,
+            title,
+            description
+        );
+    } catch (error) {
+        console.error("[Neo4j Error] Failed to create video node:", error);
+    }
+
+    // 7. Dispatch background transcription
     setImmediate(() => {
-        processVideoTranscription(video._id, videoLocalPath, { cleanVideoFile: true })
-            .catch((err) => {
-                console.error("[Background Error] Transcription worker failed:", err);
-            });
+        processVideoTranscription(
+            video._id,
+            videoLocalPath,
+            { cleanVideoFile: true }
+        ).catch((err) => {
+            console.error("[Background Error] Transcription worker failed:", err);
+        });
     });
 
-    // 7️⃣ Send response immediately without waiting for transcription
+    // 8. Send response
     return res.status(201).json(
-        new ApiResponse(201, video, "Video published successfully. Subtitle transcription queued.")
+        new ApiResponse(
+            201,
+            video,
+            "Video published successfully. Subtitle transcription queued."
+        )
     );
 });
+
 
 
 // const getVideoById = asyncHandler(async (req, res) => {
@@ -510,127 +532,147 @@ const publishVideo = asyncHandler(async (req, res) => {
 //   );
 // });
 
+
 const getVideoById = asyncHandler(async (req, res) => {
-  const { videoId } = req.params;
+    const { videoId } = req.params;
 
-  if (!isValidObjectId(videoId)) {
-    throw new ApiError(400, "Invalid video id");
-  }
-
-  const video = await Video.findById(videoId)
-    .populate("owner", "username avatar fullName");
-
-  if (!video) {
-    throw new ApiError(404, "Video not found");
-  }
-
-  /* ================= VIEW COUNT ================= */
-  if (req.user?._id) {
-    const userId = req.user._id.toString();
-
-    // ✅ SAFE CHECK (NO CRASH)
-    const viewedBy = Array.isArray(video.viewedBy) ? video.viewedBy : [];
-
-    const alreadyViewed = viewedBy.some(
-      (id) => id.toString() === userId
-    );
-
-    if (!alreadyViewed) {
-      video.views += 1;
-
-      // only push if field exists
-      if (Array.isArray(video.viewedBy)) {
-        video.viewedBy.push(req.user._id);
-      }
-
-      await video.save();
+    if (!isValidObjectId(videoId)) {
+        throw new ApiError(400, "Invalid video id");
     }
 
-    /* ================= WATCH HISTORY (FIX) ================= */
-    await User.updateOne(
-      { _id: req.user._id },
-      { $pull: { watchHistory: video._id } }
-    );
+    const video = await Video.findById(videoId)
+        .populate("owner", "username avatar fullName");
 
-    await User.updateOne(
-      { _id: req.user._id },
-      {
-        $push: {
-          watchHistory: {
-            $each: [video._id],
-            $position: 0
-          }
+    if (!video) {
+        throw new ApiError(404, "Video not found");
+    }
+
+    /* ================= VIEW COUNT ================= */
+
+    if (req.user?._id) {
+        const userId = req.user._id.toString();
+
+        const viewedBy = Array.isArray(video.viewedBy)
+            ? video.viewedBy
+            : [];
+
+        const alreadyViewed = viewedBy.some(
+            (id) => id.toString() === userId
+        );
+
+        if (!alreadyViewed) {
+            // Update MongoDB view count
+            video.views += 1;
+
+            if (Array.isArray(video.viewedBy)) {
+                video.viewedBy.push(req.user._id);
+            }
+
+            await video.save();
+
+            // Update Neo4j VIEWED relationship
+            try {
+                await viewVideo(userId, video._id);
+            } catch (error) {
+                console.error(
+                    "[Neo4j Error] Failed to register video view:",
+                    error
+                );
+            }
         }
-      }
+
+        /* ================= WATCH HISTORY ================= */
+
+        await User.updateOne(
+            { _id: req.user._id },
+            { $pull: { watchHistory: video._id } }
+        );
+
+        await User.updateOne(
+            { _id: req.user._id },
+            {
+                $push: {
+                    watchHistory: {
+                        $each: [video._id],
+                        $position: 0
+                    }
+                }
+            }
+        );
+    }
+
+    /* ================= LIKES / SUBSCRIBE ================= */
+
+    const Like = mongoose.model("Like");
+    const Subscription = mongoose.model("Subscription");
+
+    const likesCount = await Like.countDocuments({
+        video: videoId
+    });
+
+    const isLiked = req.user?._id
+        ? await Like.exists({
+            video: videoId,
+            likedBy: req.user._id
+        })
+        : false;
+
+    const isSubscribed = req.user?._id
+        ? await Subscription.exists({
+            channel: video.owner._id,
+            subscriber: req.user._id
+        })
+        : false;
+
+    /* ================= RESPONSE ================= */
+
+    return res.status(200).json(
+        new ApiResponse(
+            200,
+            {
+                _id: video._id,
+                title: video.title,
+                description: video.description,
+                thumbnail: video.thumbnail,
+                videoFile: video.videoFile,
+                duration: video.duration,
+                views: video.views,
+                createdAt: video.createdAt,
+
+                // Subtitle and transcription details
+                transcript: video.transcript,
+                caption_vtt: video.caption_vtt,
+                transcription_status: video.transcription_status,
+                transcription_error: video.transcription_error,
+                segments: video.segments || [],
+
+                // AI Summary and Advisory
+                aiAnalysis: video.aiAnalysis || {},
+                aiAdvisory: video.aiAdvisory || {},
+
+                // AI Moderation and Safety
+                isShadowBanned: video.isShadowBanned || false,
+                toxicityScore: video.toxicityScore || 0,
+                isVulgar: video.isVulgar || false,
+                flaggedCategories: video.flaggedCategories || [],
+                moderationStatus: video.moderationStatus || "pending",
+
+                likesCount,
+                isLiked,
+
+                owner: {
+                    _id: video.owner._id,
+                    username: video.owner.username,
+                    avatar: video.owner.avatar,
+                    fullName: video.owner.fullName,
+                    isSubscribed
+                }
+            },
+            "Video fetched successfully"
+        )
     );
-  }
-
-  /* ================= LIKES / SUBSCRIBE ================= */
-  const Like = mongoose.model("Like");
-  const Subscription = mongoose.model("Subscription");
-
-  const likesCount = await Like.countDocuments({ video: videoId });
-
-  const isLiked = req.user?._id
-    ? await Like.exists({
-        video: videoId,
-        likedBy: req.user._id,
-      })
-    : false;
-
-  const isSubscribed = req.user?._id
-    ? await Subscription.exists({
-        channel: video.owner._id,
-        subscriber: req.user._id,
-      })
-    : false;
-
-  return res.status(200).json(
-    new ApiResponse(
-      200,
-      {
-        _id: video._id,
-        title: video.title,
-        description: video.description,
-        thumbnail: video.thumbnail,
-        videoFile: video.videoFile,
-        duration: video.duration,
-        views: video.views,
-        createdAt: video.createdAt,
-
-        // Subtitle and transcription details
-        transcript: video.transcript,
-        caption_vtt: video.caption_vtt,
-        transcription_status: video.transcription_status,
-        transcription_error: video.transcription_error,
-        segments: video.segments || [],
-
-        // AI Summary, Chapters & Sensitive Claims Advisory
-        aiAnalysis: video.aiAnalysis || {},
-        aiAdvisory: video.aiAdvisory || {},
-
-        // AI Moderation & Safety details
-        isShadowBanned: video.isShadowBanned || false,
-        toxicityScore: video.toxicityScore || 0,
-        isVulgar: video.isVulgar || false,
-        flaggedCategories: video.flaggedCategories || [],
-        moderationStatus: video.moderationStatus || "pending",
-
-        likesCount,
-        isLiked,
-
-        owner: {
-          _id: video.owner._id,
-          username: video.owner.username,
-          avatar: video.owner.avatar,
-          fullName: video.owner.fullName,
-          isSubscribed,
-        },
-      },
-      "Video fetched successfully"
-    )
-  );
 });
+
 
 
 
