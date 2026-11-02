@@ -254,3 +254,23 @@ export const reportItem = asyncHandler(async (req, res) => {
 
     return res.status(201).json(new ApiResponse(201, report, "Report submitted successfully"));
 });
+
+export const getUserThreads = asyncHandler(async (req, res) => {
+    const { userId } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+        throw new ApiError(400, "Invalid user ID");
+    }
+
+    const threads = await Thread.find({
+        authorId: new mongoose.Types.ObjectId(userId),
+        isModeratorRemoved: false
+    })
+    .populate("communityId", "name slug avatar")
+    .populate("authorId", "fullName username avatar")
+    .sort({ createdAt: -1 });
+
+    return res.status(200).json(
+        new ApiResponse(200, threads, "User threads fetched successfully")
+    );
+});

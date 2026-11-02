@@ -1,227 +1,281 @@
-import { useEffect, useState } from "react";
-import { Camera, Save, Lock } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { useParams, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import {
-  updateAccountDetails,
-  changePassword,
+  getUserChannelProfile,
+  getUserById,
+  getUserStats,
   updateUserAvatar,
   updateCoverImage,
 } from "../api/user.api";
+import ProfileHeader from "../components/profile/ProfileHeader";
+import ProfileVideoTab from "../components/profile/ProfileVideoTab";
+import ProfilePostsTab from "../components/profile/ProfilePostsTab";
+import ProfileCommunitiesTab from "../components/profile/ProfileCommunitiesTab";
+import ProfilePlaylistsTab from "../components/profile/ProfilePlaylistsTab";
+import EditProfileModal from "../components/profile/EditProfileModal";
+import ChangePasswordModal from "../components/profile/ChangePasswordModal";
+import ProfileChatModal from "../components/profile/ProfileChatModal";
+import Loader from "../components/common/Loader";
+
+const TABS = ["Videos", "Posts", "Communities", "Playlists"];
 
 const ProfilePage = () => {
-  const { user, refetchUser } = useAuth();
+  const { username, userId } = useParams();
+  const { user: currentUser, loading: authLoading, refetchUser, logout } = useAuth();
+  const navigate = useNavigate();
 
-  const [fullName, setFullName] = useState("");
-  const [email, setEmail] = useState("");
+  const [profileUser, setProfileUser] = useState(null);
+  const [stats, setStats] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [notFound, setNotFound] = useState(false);
+  const [activeTab, setActiveTab] = useState("Videos");
 
-  const [oldPassword, setOldPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [showChatModal, setShowChatModal] = useState(false);
 
-  const [loading, setLoading] = useState(false);
+  const avatarInputRef = useRef(null);
+  const coverInputRef = useRef(null);
 
-  const [avatarKey, setAvatarKey] = useState(Date.now());
-  const [coverKey, setCoverKey] = useState(Date.now());
+  // Check if profile belongs to logged-in user
+  const isOwnProfile = Boolean(
+    currentUser &&
+      (!username && !userId
+        ? true
+        : (username && currentUser.username?.toLowerCase() === username.toLowerCase()) ||
+          (userId && (currentUser._id === userId || currentUser._id?.toString() === userId)))
+  );
 
-  useEffect(() => {
-    if (user) {
-      setFullName(user.fullName || "");
-      setEmail(user.email || "");
-    }
-  }, [user]);
-
-  const handleAccountUpdate = async () => {
-    try {
-      setLoading(true);
-      await updateAccountDetails({ fullName, email });
-      await refetchUser();
-      alert("Profile updated successfully");
-    } catch (err) {
-      alert(err.response?.data?.message || "Update failed");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handlePasswordChange = async () => {
-    if (!oldPassword || !newPassword) {
-      return alert("Both passwords are required");
-    }
-
-    if (oldPassword === newPassword) {
-      return alert("New password cannot be same as old password");
-    }
+  const loadProfile = async () => {
+    setLoading(true);
+    setNotFound(false);
 
     try {
-      setLoading(true);
-      await changePassword({ oldPassword, newPassword });
-      setOldPassword("");
-      setNewPassword("");
-      alert("Password updated successfully");
-    } catch (err) {
-      const status = err.response?.status;
-      const message = err.response?.data?.message;
+      let userData = null;
 
-      if (status === 400 || status === 401) {
-        alert(message || "Wrong old password");
-      } else {
-        alert("Password update failed");
+      if (!username && !userId) {
+        // Own profile view (/profile or /channel)
+        if (authLoading) return;
+        if (!currentUser) {
+          setLoading(false);
+          setNotFound(true);
+          return;
+        }
+        // Fetch fresh channel profile to get subscribersCount, etc.
+        try {
+          const res = await getUserChannelProfile(currentUser.username);
+          userData = res.data?.data || currentUser;
+        } catch {
+          userData = currentUser;
+        }
+      } else if (username) {
+        // Public/Channel profile by username (/channel/:username or /profile/:username)
+        const res = await getUserChannelProfile(username);
+        userData = res.data?.data;
+      } else if (userId) {
+        // Profile by ID (/u/:userId)
+        try {
+          const res = await getUserChannelProfile(userId);
+          userData = res.data?.data;
+        } catch {
+          const res = await getUserById(userId);
+          userData = res.data?.data;
+        }
+      }
+
+      if (!userData || !userData._id) {
+        setNotFound(true);
+        setProfileUser(null);
+        return;
+      }
+
+      setProfileUser(userData);
+
+      // Fetch user stats
+      try {
+        const statsRes = await getUserStats(userData._id);
+        setStats(statsRes.data?.data || null);
+      } catch {
+        setStats(null);
+      }
+    } catch (err) {
+      console.error("Failed to load profile", err);
+      if (err.response?.status === 404 || err.response?.status === 400) {
+        setNotFound(true);
       }
     } finally {
       setLoading(false);
     }
   };
 
+  useEffect(() => {
+    if (!username && !userId && authLoading) return;
+    loadProfile();
+  }, [username, userId, currentUser?._id, authLoading]);
+
   const handleAvatarChange = async (file) => {
     if (!file) return;
-
     const formData = new FormData();
     formData.append("avatar", file);
-
     try {
-      setLoading(true);
       await updateUserAvatar(formData);
       await refetchUser();
-      setAvatarKey(Date.now());
-      alert("Avatar updated successfully");
+      await loadProfile();
     } catch (err) {
-      alert(err.response?.data?.message || "Avatar update failed");
-    } finally {
-      setLoading(false);
+      console.error("Avatar update failed", err);
     }
   };
 
   const handleCoverChange = async (file) => {
     if (!file) return;
-
     const formData = new FormData();
     formData.append("coverImage", file);
-
     try {
-      setLoading(true);
       await updateCoverImage(formData);
       await refetchUser();
-      setCoverKey(Date.now());
-      alert("Cover image updated successfully");
+      await loadProfile();
     } catch (err) {
-      alert(err.response?.data?.message || "Cover update failed");
-    } finally {
-      setLoading(false);
+      console.error("Cover update failed", err);
     }
   };
 
-  if (!user) return null;
+  const handleLogout = () => {
+    logout();
+    navigate("/login");
+  };
+
+  if (loading) {
+    return (
+      <div className="max-w-5xl mx-auto py-12">
+        <Loader />
+      </div>
+    );
+  }
+
+  if (notFound || !profileUser) {
+    return (
+      <div className="max-w-5xl mx-auto py-20 text-center animate-[fadeIn_0.35s_ease-out]">
+        <div className="w-16 h-16 rounded-full bg-slate-100 border border-slate-200 text-slate-400 mx-auto flex items-center justify-center font-bold text-2xl mb-4">
+          ?
+        </div>
+        <h2 className="text-2xl font-bold text-gray-800 mb-2">User not found</h2>
+        <p className="text-gray-500 max-w-sm mx-auto text-sm">
+          The user profile you're looking for doesn't exist, has changed their username, or has been removed.
+        </p>
+      </div>
+    );
+  }
 
   return (
-    <div className="max-w-5xl mx-auto animate-[fadeIn_0.35s_ease-out]">
-      {/* COVER */}
-      <div className="relative h-48 rounded-xl mb-16 overflow-hidden bg-gray-200 animate-[cardIn_0.4s_ease-out]">
-        {user.coverImage && (
-          <img
-            src={`${user.coverImage}?t=${coverKey}`}
-            className="w-full h-full object-cover"
-            alt="cover"
-          />
-        )}
-
-        <label className="absolute top-4 right-4 bg-black/70 text-white p-2 rounded-full cursor-pointer transition hover:scale-105">
-          <Camera size={18} />
+    <div className="max-w-5xl mx-auto space-y-6 pb-12 animate-[fadeIn_0.35s_ease-out]">
+      {/* Hidden file inputs for avatar/cover upload (own profile only) */}
+      {isOwnProfile && (
+        <>
           <input
+            ref={avatarInputRef}
             type="file"
-            hidden
             accept="image/*"
+            className="hidden"
+            onChange={(e) => handleAvatarChange(e.target.files[0])}
+          />
+          <input
+            ref={coverInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
             onChange={(e) => handleCoverChange(e.target.files[0])}
           />
-        </label>
-      </div>
+        </>
+      )}
 
-      {/* PROFILE CARD */}
-      <div className="bg-white rounded-xl p-6 -mt-20 shadow animate-[slideUp_0.35s_ease-out]">
-        <div className="flex gap-6 items-center">
-          <div className="relative">
-            <img
-              src={`${user.avatar}?t=${avatarKey}`}
-              alt="avatar"
-              className="w-32 h-32 rounded-full object-cover bg-gray-300 transition-transform hover:scale-105"
+      {/* Unified Profile Header */}
+      <ProfileHeader
+        profileUser={profileUser}
+        stats={stats}
+        isOwnProfile={isOwnProfile}
+        onEditProfile={() => setShowEditModal(true)}
+        onEditAvatar={() => avatarInputRef.current?.click()}
+        onEditCover={() => coverInputRef.current?.click()}
+        onChangePassword={() => setShowPasswordModal(true)}
+        onLogout={handleLogout}
+        onOpenChat={() => setShowChatModal(true)}
+      />
+
+      {/* Content Tabs (Videos, Posts, Communities, Playlists) */}
+      <div className="bg-white rounded-2xl border border-gray-200/80 shadow-xs overflow-hidden mx-2 md:mx-4">
+        {/* Tab Navigation */}
+        <div className="flex border-b border-gray-100 px-3 md:px-6 overflow-x-auto custom-scrollbar">
+          {TABS.map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`px-5 py-3.5 text-sm font-semibold transition border-b-2 whitespace-nowrap -mb-px ${
+                activeTab === tab
+                  ? "text-blue-600 border-blue-600 bg-blue-50/50"
+                  : "text-gray-500 hover:text-gray-800 border-transparent hover:border-gray-200"
+              }`}
+            >
+              {tab}
+            </button>
+          ))}
+        </div>
+
+        {/* Tab Content Panels */}
+        <div className="p-4 sm:p-6 min-h-[300px]">
+          {activeTab === "Videos" && (
+            <ProfileVideoTab
+              userId={profileUser._id}
+              isOwnProfile={isOwnProfile}
             />
-            <label className="absolute bottom-2 right-2 bg-blue-600 text-white p-2 rounded-full cursor-pointer transition hover:scale-105">
-              <Camera size={16} />
-              <input
-                type="file"
-                hidden
-                accept="image/*"
-                onChange={(e) => handleAvatarChange(e.target.files[0])}
-              />
-            </label>
-          </div>
+          )}
 
-          <div>
-            <h1 className="text-2xl font-bold">{user.fullName}</h1>
-            <p className="text-gray-500">@{user.username}</p>
-            <p className="text-gray-600">{user.email}</p>
-          </div>
+          {activeTab === "Posts" && (
+            <ProfilePostsTab
+              userId={profileUser._id}
+              isOwnProfile={isOwnProfile}
+            />
+          )}
+
+          {activeTab === "Communities" && (
+            <ProfileCommunitiesTab
+              userId={profileUser._id}
+              isOwnProfile={isOwnProfile}
+            />
+          )}
+
+          {activeTab === "Playlists" && (
+            <ProfilePlaylistsTab
+              userId={profileUser._id}
+              isOwnProfile={isOwnProfile}
+            />
+          )}
         </div>
       </div>
 
-      {/* SETTINGS */}
-      <div className="grid md:grid-cols-2 gap-6 mt-8">
-        {/* ACCOUNT */}
-        <div className="bg-white p-6 rounded-xl shadow animate-[cardIn_0.35s_ease-out]">
-          <h2 className="font-semibold mb-4">Account Details</h2>
+      {/* Account Management Modals (Only rendered for own profile) */}
+      {isOwnProfile && showEditModal && (
+        <EditProfileModal
+          user={profileUser}
+          onClose={() => setShowEditModal(false)}
+          onSave={async () => {
+            await refetchUser();
+            await loadProfile();
+          }}
+        />
+      )}
 
-          <input
-            className="w-full border px-4 py-2 rounded mb-3"
-            value={fullName}
-            onChange={(e) => setFullName(e.target.value)}
-            placeholder="Full Name"
-          />
+      {isOwnProfile && showPasswordModal && (
+        <ChangePasswordModal onClose={() => setShowPasswordModal(false)} />
+      )}
 
-          <input
-            className="w-full border px-4 py-2 rounded mb-4"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="Email"
-          />
-
-          <button
-            disabled={loading}
-            onClick={handleAccountUpdate}
-            className="flex gap-2 bg-blue-600 text-white px-5 py-2 rounded
-            transition hover:bg-blue-700 active:scale-[0.98]"
-          >
-            <Save size={18} /> Save
-          </button>
-        </div>
-
-        {/* PASSWORD */}
-        <div className="bg-white p-6 rounded-xl shadow animate-[cardIn_0.35s_ease-out]">
-          <h2 className="font-semibold mb-4">Change Password</h2>
-
-          <input
-            type="password"
-            className="w-full border px-4 py-2 rounded mb-3"
-            placeholder="Old Password"
-            value={oldPassword}
-            onChange={(e) => setOldPassword(e.target.value)}
-          />
-
-          <input
-            type="password"
-            className="w-full border px-4 py-2 rounded mb-4"
-            placeholder="New Password"
-            value={newPassword}
-            onChange={(e) => setNewPassword(e.target.value)}
-          />
-
-          <button
-            disabled={loading}
-            onClick={handlePasswordChange}
-            className="flex gap-2 bg-gray-900 text-white px-5 py-2 rounded
-            transition hover:bg-black active:scale-[0.98]"
-          >
-            <Lock size={18} /> Update
-          </button>
-        </div>
-      </div>
+      {/* Chat / Message Modal */}
+      {showChatModal && (
+        <ProfileChatModal
+          initialUser={isOwnProfile ? null : profileUser}
+          onClose={() => setShowChatModal(false)}
+        />
+      )}
     </div>
   );
 };

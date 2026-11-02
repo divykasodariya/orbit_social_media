@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { verifyJWT } from "../middlewares/auth.middleware.js";
+import { verifyJWT, optionalAuth } from "../middlewares/auth.middleware.js";
 import { upload } from "../middlewares/multer.middleware.js";
 // video.routes.js - Make getVideoById work for both auth/non-auth
 
@@ -24,16 +24,16 @@ const router = Router();
 router.get("/", getAllVideos);
 
 // 🔥 MUST be above :videoId
-router.get("/user/videos", verifyJWT, getAllUserVideos);
+router.get("/user/videos", optionalAuth, getAllUserVideos);
 
 // 🤖 Recommendations - must be ABOVE /:videoId
-router.get("/recommendations/:videoId", verifyJWT, getVideoRecommendations);
+router.get("/recommendations/:videoId", optionalAuth, getVideoRecommendations);
 
 // 📝 Subtitles in WebVTT format for video players (PUBLIC)
 router.get("/:videoId/subtitles.vtt", getVideoSubtitles);
 
 // Watch page (PUBLIC)
-router.get("/:videoId", verifyJWT, getVideoById);
+router.get("/:videoId", optionalAuth, getVideoById);
 
 /* ================= PROTECTED ROUTES ================= */
 

@@ -6,6 +6,11 @@ import { ApiResponse } from "../utils/ApiResponse.js"
 import jwt from "jsonwebtoken"
 import mongoose from "mongoose"
 import { createUserNode } from "../services/graph/userGraph.service.js";
+import { Video } from "../models/video.model.js";
+import { Tweet } from "../models/tweet.model.js";
+import { Thread } from "../models/thread.model.js";
+import { FriendRequest } from "../models/friendRequest.model.js";
+import { CommunityMembership } from "../models/communityMembership.model.js";
 
 // ============================================
 // COOKIE CONFIGURATION HELPER
@@ -423,11 +428,14 @@ const getUserChannelProfile = asyncHandler(async (req, res) => {
         ? new mongoose.Types.ObjectId(req.user._id)
         : null;
 
+    const isObjectId = mongoose.Types.ObjectId.isValid(username);
+    const matchCondition = isObjectId
+        ? { $or: [{ username: username.toLowerCase() }, { _id: new mongoose.Types.ObjectId(username) }] }
+        : { username: username.toLowerCase() };
+
     const channel = await User.aggregate([
         {
-            $match: {
-                username: username.toLowerCase(),
-            },
+            $match: matchCondition,
         },
         {
             $lookup: {
@@ -459,11 +467,13 @@ const getUserChannelProfile = asyncHandler(async (req, res) => {
                 _id: 1,
                 username: 1,
                 fullName: 1,
+                email: 1,
                 avatar: 1,
                 coverImage: 1,
                 subscribersCount: 1,
                 channelsSubscribedToCount: 1,
                 isSubscribed: 1,
+                createdAt: 1,
             },
         },
     ]);
@@ -570,6 +580,66 @@ const searchUsers = asyncHandler(async (req, res) => {
 
 
 // ============================================
+// GET USER BY ID (public)
+// ============================================
+const getUserById = asyncHandler(async (req, res) => {
+    const { userId } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+        throw new ApiError(400, "Invalid user ID");
+    }
+
+    const user = await User.findById(userId).select(
+        "_id fullName username email avatar coverImage"
+    );
+
+    if (!user) {
+        throw new ApiError(404, "User not found");
+    }
+
+    return res
+        .status(200)
+        .json(new ApiResponse(200, user, "User fetched successfully"));
+});
+
+
+// ============================================
+// GET USER STATS
+// ============================================
+const getUserStats = asyncHandler(async (req, res) => {
+    const { userId } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+        throw new ApiError(400, "Invalid user ID");
+    }
+
+    const userObjectId = new mongoose.Types.ObjectId(userId);
+
+    const [videoCount, tweetCount, threadCount, communityCount, friendCount] = await Promise.all([
+        Video.countDocuments({ owner: userObjectId, isPublished: true }),
+        Tweet.countDocuments({ owner: userObjectId }),
+        Thread.countDocuments({ authorId: userObjectId, isModeratorRemoved: false }),
+        CommunityMembership.countDocuments({ userId: userObjectId, status: "APPROVED" }),
+        FriendRequest.countDocuments({
+            $or: [{ sender: userObjectId }, { receiver: userObjectId }],
+            status: "ACCEPTED"
+        })
+    ]);
+
+    return res.status(200).json(
+        new ApiResponse(200, {
+            videoCount,
+            tweetCount,
+            threadCount,
+            postCount: tweetCount + threadCount,
+            communityCount,
+            friendCount
+        }, "User stats fetched successfully")
+    );
+});
+
+
+// ============================================
 // EXPORTS
 // ============================================
 export {
@@ -584,5 +654,7 @@ export {
     updateCoverImageAvatar,
     getUserChannelProfile,
     getWatchHistory,
-    searchUsers
+    searchUsers,
+    getUserById,
+    getUserStats
 }

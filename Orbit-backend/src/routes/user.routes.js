@@ -1,11 +1,11 @@
 import { Router } from "express";
-import { loginUser, logoutUser, registerUser,refreshAccessToken,
+import { loginUser, logoutUser, registerUser, refreshAccessToken,
     changeCurrentPassword, getCurrentUser, updateAccountDetails,
     updateUserAvatar, updateCoverImageAvatar, getUserChannelProfile,
-    getWatchHistory, searchUsers} from "../controllers/user.controller.js";
+    getWatchHistory, searchUsers, getUserById, getUserStats} from "../controllers/user.controller.js";
 
 import {upload} from "../middlewares/multer.middleware.js"
-import { verifyJWT } from "../middlewares/auth.middleware.js";
+import { verifyJWT, optionalAuth } from "../middlewares/auth.middleware.js";
 
 const router = Router()
 
@@ -45,7 +45,7 @@ router.route("/update-account").patch(verifyJWT, updateAccountDetails)
 router.route("/avatar").patch(verifyJWT, upload.single("avatar"), updateUserAvatar)
 router.route("/cover-image").patch(verifyJWT, upload.single("coverImage"), updateCoverImageAvatar)
 
-router.route("/c/:username").get(verifyJWT, getUserChannelProfile)
+router.route("/c/:username").get(optionalAuth, getUserChannelProfile)
 
 import { getMutuals } from "../controllers/graph.controller.js";
 
@@ -54,6 +54,8 @@ import { getMutuals } from "../controllers/graph.controller.js";
 router.route("/history").get(verifyJWT, getWatchHistory)
 router.route("/search").get(verifyJWT, searchUsers)
 router.route("/:userId/mutuals").get(verifyJWT, getMutuals)
+router.route("/id/:userId").get(getUserById)
+router.route("/:userId/stats").get(getUserStats)
 
 
 

@@ -21,7 +21,7 @@ router.get("/", optionalAuth, getAllTweets); // Use optionalAuth instead of veri
 
 /* ================= PROTECTED ================= */
 router.post("/", verifyJWT, upload.single("image"), createTweet);
-router.get("/user/:userId", verifyJWT, getUserTweet);
+router.get("/user/:userId", optionalAuth, getUserTweet);
 
 router
   .route("/:tweetId")

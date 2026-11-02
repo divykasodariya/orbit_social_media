@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { timeAgo } from '../../utils/helpers';
 import { MessageSquare, Heart, Share2, Send, Loader2 } from 'lucide-react';
 import { toggleTweetLike } from '../../api/like.api';
@@ -78,15 +79,18 @@ const SocialPostCard = ({ item }) => {
             )}
             
             <div className="flex gap-3 mb-3">
-                <div className="w-10 h-10 rounded-full bg-gray-200 overflow-hidden shrink-0 border">
+                <Link
+                    to={post.ownerDetails?.username || post.owner?.username ? `/channel/${post.ownerDetails?.username || post.owner?.username}` : (post.ownerDetails?._id || post.owner?._id ? `/u/${post.ownerDetails?._id || post.owner?._id}` : "#")}
+                    className="w-10 h-10 rounded-full bg-gray-200 overflow-hidden shrink-0 border hover:opacity-90 transition-opacity"
+                >
                     <img 
                         src={post.ownerDetails?.avatar || post.owner?.avatar || `https://ui-avatars.com/api/?name=User`} 
                         alt="Avatar" 
                         className="w-full h-full object-cover"
                     />
-                </div>
-                <button 
-                    onClick={(e) => { e.stopPropagation(); navigate(`/friends?q=${post.ownerDetails?.username || post.owner?.username || 'user'}`); }}
+                </Link>
+                <Link
+                    to={post.ownerDetails?.username || post.owner?.username ? `/channel/${post.ownerDetails?.username || post.owner?.username}` : (post.ownerDetails?._id || post.owner?._id ? `/u/${post.ownerDetails?._id || post.owner?._id}` : "#")}
                     className="text-left"
                 >
                     <h4 className="font-semibold text-gray-900 leading-tight hover:text-blue-600 hover:underline">
@@ -95,7 +99,7 @@ const SocialPostCard = ({ item }) => {
                     <p className="text-xs text-gray-500">
                         @{post.ownerDetails?.username || post.owner?.username || "user"} • {timeAgo(post.createdAt)}
                     </p>
-                </button>
+                </Link>
             </div>
 
             <div className="text-gray-800 text-sm mb-4 whitespace-pre-wrap">
@@ -163,19 +167,24 @@ const SocialPostCard = ({ item }) => {
                         ) : comments.length > 0 ? (
                             comments.map(c => (
                                 <div key={c._id} className="flex gap-3">
-                                    <img 
-                                        src={c.owner?.avatar || c.commentor?.avatar || `https://ui-avatars.com/api/?name=User`} 
-                                        alt="Avatar" 
-                                        className="w-8 h-8 rounded-full border object-cover shrink-0"
-                                    />
+                                    <Link
+                                        to={(c.owner?.username || c.commentor?.username) ? `/channel/${c.owner?.username || c.commentor?.username}` : "#"}
+                                        className="shrink-0"
+                                    >
+                                        <img 
+                                            src={c.owner?.avatar || c.commentor?.avatar || `https://ui-avatars.com/api/?name=User`} 
+                                            alt="Avatar" 
+                                            className="w-8 h-8 rounded-full border object-cover hover:opacity-90 transition-opacity"
+                                        />
+                                    </Link>
                                     <div className="flex-1 bg-gray-50 p-3 rounded-2xl rounded-tl-none">
                                         <div className="flex items-center gap-2 mb-1">
-                                            <button 
-                                                onClick={(e) => { e.stopPropagation(); navigate(`/friends?q=${c.owner?.username || c.commentor?.username || 'user'}`); }}
+                                            <Link 
+                                                to={(c.owner?.username || c.commentor?.username) ? `/channel/${c.owner?.username || c.commentor?.username}` : "#"}
                                                 className="font-semibold text-xs text-gray-900 hover:text-blue-600 hover:underline"
                                             >
                                                 {c.owner?.fullName || c.commentor?.fullName || "User"}
-                                            </button>
+                                            </Link>
                                             <span className="text-[10px] text-gray-400">{timeAgo(c.createdAt)}</span>
                                         </div>
                                         <p className="text-sm text-gray-800">{c.content}</p>

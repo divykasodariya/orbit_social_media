@@ -56,7 +56,7 @@ const TweetCard = ({
       animate-[cardIn_0.35s_ease-out]"
     >
       <div className="flex gap-3 items-start">
-        <Link to={`/channel/${owner?.username}`}>
+        <Link to={owner?._id ? `/u/${owner._id}` : `/channel/${owner?.username}`}>
           <img
             src={owner?.avatar}
             alt={owner?.fullName}
@@ -69,7 +69,12 @@ const TweetCard = ({
           {/* HEADER */}
           <div className="flex justify-between items-start">
             <div>
-              <p className="font-semibold">{owner?.fullName}</p>
+              <Link
+                to={owner?._id ? `/u/${owner._id}` : `/channel/${owner?.username}`}
+                className="font-semibold hover:text-blue-600 hover:underline transition-colors"
+              >
+                {owner?.fullName}
+              </Link>
               <p className="text-sm text-gray-500">
                 @{owner?.username} • {formatDate(tweet.createdAt)}
               </p>

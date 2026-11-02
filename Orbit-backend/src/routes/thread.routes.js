@@ -9,7 +9,8 @@ import {
     deleteVoteThread,
     addThreadComment,
     getThreadComments,
-    reportItem
+    reportItem,
+    getUserThreads
 } from "../controllers/thread.controller.js";
 import { verifyJWT } from "../middlewares/auth.middleware.js";
 
@@ -20,6 +21,7 @@ const router = Router();
 // To match requirements, we'll enforce verifyJWT except for reading. Actually, the user asked to follow Orbit's conventions.
 
 router.get("/community/:communityId", getCommunityThreads);
+router.get("/user/:userId", getUserThreads);
 router.get("/:id", getThreadById);
 router.get("/:id/comments", getThreadComments);
 

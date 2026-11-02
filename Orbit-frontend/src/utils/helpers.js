@@ -51,3 +51,13 @@ export const timeAgo = (date) => {
   return Math.floor(seconds) + " seconds ago";
 };
 
+/* ---------------- GET INITIALS ---------------- */
+export const getInitials = (name = "") => {
+  if (!name || typeof name !== "string") return "?";
+  const trimmed = name.trim();
+  if (!trimmed) return "?";
+  const parts = trimmed.split(/\s+/);
+  if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
+  return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
+};
+

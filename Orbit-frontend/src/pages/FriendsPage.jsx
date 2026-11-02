@@ -12,7 +12,7 @@ import { searchUsers } from '../api/user.api';
 import { Users, UserPlus, UserCheck, UserX, Loader2, Search, X, MessageCircle, Send, ArrowLeft } from 'lucide-react';
 import { getMessages, sendMessage } from '../api/message.api';
 import { useAuth } from '../context/AuthContext';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, Link } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 
 const FriendsPage = () => {
@@ -295,14 +295,17 @@ const FriendsPage = () => {
         
         return (
             <div className="bg-white border rounded-xl p-4 flex items-center justify-between shadow-sm hover:shadow-md transition-shadow">
-                <div className="flex items-center gap-4">
-                    <img src={avatar} alt="avatar" className="w-12 h-12 rounded-full border object-cover" />
+                <Link 
+                    to={userData?.username ? `/channel/${userData.username}` : (userData?._id ? `/u/${userData._id}` : "#")}
+                    className="flex items-center gap-4 group"
+                >
+                    <img src={avatar} alt="avatar" className="w-12 h-12 rounded-full border object-cover group-hover:scale-105 transition-transform" />
                     <div>
-                        <h3 className="font-bold text-gray-900">{userData?.fullName || 'Orbit User'}</h3>
+                        <h3 className="font-bold text-gray-900 group-hover:text-blue-600 transition-colors">{userData?.fullName || 'Orbit User'}</h3>
                         <p className="text-sm font-medium text-gray-500">@{userData?.username || 'user'}</p>
                         {subtitle && <p className="text-xs text-blue-600 font-semibold mt-1">{subtitle}</p>}
                     </div>
-                </div>
+                </Link>
                 <div className="flex items-center gap-2">
                     {actionButton}
                 </div>

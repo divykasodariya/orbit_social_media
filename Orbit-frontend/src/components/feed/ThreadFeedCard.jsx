@@ -24,7 +24,7 @@ const CommentRow = ({ comment }) => {
             <div className="flex-1 pb-4 min-w-0">
                 <div className="flex items-center gap-2 mb-1 flex-wrap">
                     <button 
-                        onClick={(e) => { e.stopPropagation(); navigate(`/friends?q=${owner.username}`); }}
+                        onClick={(e) => { e.stopPropagation(); if (owner.username) navigate(`/channel/${owner.username}`); }}
                         className="text-xs font-bold text-gray-900 hover:text-blue-600 hover:underline"
                     >
                         u/{owner.username || 'user'}
@@ -159,7 +159,7 @@ const ThreadFeedCard = ({ item }) => {
                                 className="w-5 h-5 rounded-full border object-cover"
                             />
                             <button 
-                                onClick={(e) => { e.stopPropagation(); navigate(`/friends?q=${author.username}`); }}
+                                onClick={(e) => { e.stopPropagation(); if (author.username) navigate(`/channel/${author.username}`); }}
                                 className="font-semibold text-gray-700 hover:text-blue-600 hover:underline"
                             >
                                 u/{author.username || 'user'}
@@ -213,7 +213,7 @@ const ThreadFeedCard = ({ item }) => {
                             {user && (
                                 <form onSubmit={handlePostComment} className="flex gap-3 p-4 border-b bg-white">
                                     <img
-                                        src={user?.avatar || `https://ui-avatars.com/api/?name=${user?.fullName || 'U'}&size=32&background=3b82f6&color=fff`}
+                                        src={user?.avatar || `https://ui-avatars.com/api/?name=${user?.fullName || 'U'}&size=32&background=e5e7eb&color=374151`}
                                         alt="avatar"
                                         className="w-8 h-8 rounded-full border object-cover shrink-0 mt-0.5"
                                     />

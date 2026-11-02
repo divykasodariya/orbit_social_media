@@ -42,7 +42,7 @@ const CreateThreadBox = ({ communityId, onThreadCreated }) => {
             {/* Header */}
             <div className="flex items-center gap-3 p-4 border-b">
                 <img
-                    src={user?.avatar || `https://ui-avatars.com/api/?name=${user?.fullName || 'U'}&background=3b82f6&color=fff`}
+                    src={user?.avatar || `https://ui-avatars.com/api/?name=${user?.fullName || 'U'}&background=e5e7eb&color=374151`}
                     alt="avatar"
                     className="w-9 h-9 rounded-full border object-cover shrink-0"
                 />

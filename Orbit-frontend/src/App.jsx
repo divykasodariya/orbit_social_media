@@ -30,6 +30,7 @@ import HistoryPage from "./pages/HistoryPage";
 import PlaylistDetailsPage from "./pages/PlaylistDetailsPage";
 import LikedVideosPage from "./pages/LikedVideosPage";
 import PlaylistsPage from "./pages/PlaylistsPage";
+import PublicProfilePage from "./pages/PublicProfilePage";
 
 // ✅ Wrapper to prevent logged-in users from seeing login/register
 function AuthRoute({ children }) {
@@ -80,8 +81,12 @@ function App() {
             <Route path="/video" element={<Navigate to="/videos" replace />} />
             <Route path="/communities" element={<CommunitiesPage />} />
             <Route path="/watch/:videoId" element={<WatchPage />} />
-            <Route path="/channel/:username" element={<ChannelPage />} />
+            <Route path="/channel" element={<Navigate to="/profile" replace />} />
+            <Route path="/channel/:username" element={<ProfilePage />} />
+            <Route path="/c/:username" element={<ProfilePage />} />
+            <Route path="/profile/:username" element={<ProfilePage />} />
             <Route path="/tweets" element={<TweetsPage />} />
+            <Route path="/u/:userId" element={<ProfilePage />} />
           </Route>
 
         {/* ================= PROTECTED ROUTES ================= */}

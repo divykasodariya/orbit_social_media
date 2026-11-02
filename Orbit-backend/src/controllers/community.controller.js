@@ -324,6 +324,25 @@ const searchCommunities = asyncHandler(async (req, res) => {
     return res.status(200).json(new ApiResponse(200, results, "Search results fetched"));
 });
 
+const getUserCommunities = asyncHandler(async (req, res) => {
+    const { userId } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+        throw new ApiError(400, "Invalid user ID");
+    }
+
+    const memberships = await CommunityMembership.find({
+        userId: new mongoose.Types.ObjectId(userId),
+        status: "APPROVED"
+    }).populate("communityId", "name slug description avatar banner memberCount privacy");
+
+    const communities = memberships
+        .map((m) => m.communityId)
+        .filter(Boolean);
+
+    return res.status(200).json(new ApiResponse(200, communities, "User communities fetched successfully"));
+});
+
 export {
     createCommunity,
     getCommunities,
@@ -333,5 +352,6 @@ export {
     joinCommunityHandler,
     leaveCommunityHandler,
     getCommunityMembers,
-    searchCommunities
+    searchCommunities,
+    getUserCommunities
 };

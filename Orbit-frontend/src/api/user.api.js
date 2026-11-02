@@ -49,3 +49,9 @@ export const getWatchHistory = () =>
 
 export const searchUsers = (query) =>
   http.get(`/users/search?q=${encodeURIComponent(query)}`);
+
+export const getUserById = (userId) =>
+  http.get(`/users/id/${userId}`);
+
+export const getUserStats = (userId) =>
+  http.get(`/users/${userId}/stats`);

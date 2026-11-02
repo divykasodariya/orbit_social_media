@@ -1,11 +1,12 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { timeAgo } from '../../utils/helpers';
 import { Play } from 'lucide-react';
 
 const VideoFeedCard = ({ item }) => {
     const navigate = useNavigate();
     const { raw: video, reason } = item;
+    const username = video.ownerDetails?.username || video.owner?.username;
     
     if (!video) return null;
 
@@ -34,23 +35,28 @@ const VideoFeedCard = ({ item }) => {
             </div>
             
             <div className="flex gap-3 mt-2">
-                <div className="w-10 h-10 rounded-full overflow-hidden bg-gray-200 shrink-0 border">
+                <Link
+                    to={username ? `/channel/${username}` : "#"}
+                    onClick={(e) => e.stopPropagation()}
+                    className="w-10 h-10 rounded-full overflow-hidden bg-gray-200 shrink-0 border hover:opacity-90"
+                >
                     <img 
                         src={video.ownerDetails?.avatar || video.owner?.avatar || `https://ui-avatars.com/api/?name=User`} 
                         alt="Avatar" 
                         className="w-full h-full object-cover"
                     />
-                </div>
+                </Link>
                 <div className="flex flex-col">
                     <h3 className="text-gray-900 font-semibold line-clamp-2 leading-tight group-hover:text-blue-600 transition-colors">
                         {video.title}
                     </h3>
-                    <button 
-                        onClick={(e) => { e.stopPropagation(); navigate(`/friends?q=${video.ownerDetails?.username || video.owner?.username || 'user'}`); }}
+                    <Link
+                        to={username ? `/channel/${username}` : "#"}
+                        onClick={(e) => e.stopPropagation()}
                         className="text-sm text-gray-500 mt-1 hover:text-blue-600 hover:underline text-left"
                     >
                         {video.ownerDetails?.fullName || video.owner?.fullName || "Creator"}
-                    </button>
+                    </Link>
                     <p className="text-xs text-gray-500">
                         {video.views || 0} views • {timeAgo(video.createdAt)}
                     </p>

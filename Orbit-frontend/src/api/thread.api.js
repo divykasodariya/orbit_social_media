@@ -14,3 +14,6 @@ export const getThreadComments = (threadId, page = 1, limit = 50) =>
 
 export const addThreadComment = (threadId, content) =>
   http.post(`/threads/${threadId}/comments`, { content });
+
+export const getUserThreads = (userId) =>
+  http.get(`/threads/user/${userId}`);

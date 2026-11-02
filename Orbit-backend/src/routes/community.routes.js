@@ -8,7 +8,8 @@ import {
     joinCommunityHandler,
     leaveCommunityHandler,
     getCommunityMembers,
-    searchCommunities
+    searchCommunities,
+    getUserCommunities
 } from "../controllers/community.controller.js";
 import { verifyJWT } from "../middlewares/auth.middleware.js";
 
@@ -19,6 +20,7 @@ router.use(verifyJWT);
 
 router.get("/", getCommunities);
 router.get("/search", searchCommunities);
+router.get("/user/:userId", getUserCommunities);
 router.get("/:slug", getCommunityBySlug);
 router.get("/:id/members", getCommunityMembers);
 

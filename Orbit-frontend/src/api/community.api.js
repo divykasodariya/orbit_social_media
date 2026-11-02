@@ -11,3 +11,4 @@ export const createCommunity = (data) => http.post("/communities", data);
 export const getCommunityMembers = (id) => http.get(`/communities/${id}/members`);
 export const updateCommunity = (id, data) => http.patch(`/communities/${id}`, data);
 export const deleteCommunity = (id) => http.delete(`/communities/${id}`);
+export const getUserCommunities = (userId) => http.get(`/communities/user/${userId}`);
