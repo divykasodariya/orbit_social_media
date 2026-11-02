@@ -140,6 +140,9 @@ const TweetsPage = () => {
               style={{ animationDelay: `${i * 0.04}s` }}
               className="animate-[cardIn_0.4s_ease-out]"
             >
+              {/* console.log("Logged in user:", user?._id);
+              console.log("Tweet owner:", tweet.owner);
+              console.log("Can modify:", user?._id === tweet.owner?._id); */}
               <TweetCard
                 tweet={tweet}
                 canModify={user?._id === tweet.owner._id}

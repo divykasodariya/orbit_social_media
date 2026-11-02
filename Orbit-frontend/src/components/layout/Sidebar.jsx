@@ -6,6 +6,7 @@ import {
   MessageSquare,
   Heart,
   ListVideo,
+  Send
 } from "lucide-react";
 
 const Sidebar = ({ isMobile, isOpen, onClose, isCollapsed = true }) => {
@@ -18,6 +19,7 @@ const Sidebar = ({ isMobile, isOpen, onClose, isCollapsed = true }) => {
     { to: "/friends", label: "Friends", icon: Heart },
     { to: "/explore", label: "Explore", icon: ListVideo },
     { to: "/notifications", label: "Notifications", icon: MessageSquare },
+    { to: "/tweets", label: "Tweets", icon: Send }
   ];
 
   const isActive = (path) => location.pathname === path;
